@@ -1,11 +1,11 @@
 """Image to PDF router."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -30,10 +30,10 @@ settings = get_settings()
 class ImageToPdfResponse(BaseModel):
     """Response for image-to-pdf endpoint."""
 
-    job_id: str
-    status: str
-    message: str
-    image_count: int
+    job_id: str = Field(..., description="Unique job identifier", example="550e8400-e29b-41d4-a716-446655440000")
+    status: str = Field(..., description="Job status", example="pending")
+    message: str = Field(..., description="Status message", example="Images uploaded. Conversion started.")
+    image_count: int = Field(..., description="Number of images being converted", example=5)
 
 
 async def process_image_to_pdf(
@@ -89,7 +89,7 @@ async def process_image_to_pdf(
         job.file_path = str(output_file)
         job.original_size = total_input_size
         job.output_size = result.output_size
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
     except Exception as e:
@@ -103,7 +103,7 @@ async def process_image_to_pdf(
             file_manager.delete_file(Path(path))
 
 
-@router.post("/image-to-pdf", response_model=ImageToPdfResponse)
+@router.post("/image-to-pdf", status_code=status.HTTP_202_ACCEPTED, response_model=ImageToPdfResponse)
 async def convert_images_to_pdf(
     background_tasks: BackgroundTasks,
     files: Annotated[

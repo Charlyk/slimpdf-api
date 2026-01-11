@@ -74,11 +74,10 @@ class TestCompressionService:
     @pytest.fixture
     def service(self):
         """Create compression service with mocked Ghostscript."""
-        with patch.object(CompressionService, '_find_ghostscript', return_value='gs'):
-            return CompressionService()
+        return CompressionService(gs_command='gs')
 
     def test_init_finds_ghostscript(self, service):
-        """Test service initialization finds Ghostscript."""
+        """Test service initialization uses provided Ghostscript command."""
         assert service.gs_command == 'gs'
 
     def test_build_gs_command(self, service, temp_dir: Path):
@@ -189,11 +188,11 @@ class TestCompressionService:
         input_path = temp_dir / "input.pdf"
         output_path = temp_dir / "output.pdf"
 
-        # Test with string value
+        # Test with string value (enum value, not name)
         cmd = service._build_gs_command(
             input_path,
             output_path,
-            "medium",  # String instead of enum
+            "ebook",  # String value of CompressionQuality.MEDIUM
         )
 
         assert "-dPDFSETTINGS=/ebook" in cmd

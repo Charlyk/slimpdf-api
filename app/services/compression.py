@@ -55,8 +55,21 @@ class CompressionResult:
 class CompressionService:
     """Service for compressing PDFs using Ghostscript."""
 
-    def __init__(self):
-        self.gs_command = self._find_ghostscript()
+    def __init__(self, gs_command: str | None = None):
+        """
+        Initialize compression service.
+
+        Args:
+            gs_command: Optional Ghostscript command. If None, will be found lazily.
+        """
+        self._gs_command = gs_command
+
+    @property
+    def gs_command(self) -> str:
+        """Get Ghostscript command, finding it lazily if needed."""
+        if self._gs_command is None:
+            self._gs_command = self._find_ghostscript()
+        return self._gs_command
 
     def _find_ghostscript(self) -> str:
         """Find the Ghostscript executable."""

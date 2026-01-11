@@ -1,11 +1,11 @@
 """Compress PDF router."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -30,22 +30,22 @@ settings = get_settings()
 class CompressResponse(BaseModel):
     """Response for compress endpoint."""
 
-    job_id: str
-    status: str
-    message: str
+    job_id: str = Field(..., description="Unique job identifier", example="550e8400-e29b-41d4-a716-446655440000")
+    status: str = Field(..., description="Job status", example="pending")
+    message: str = Field(..., description="Status message", example="File uploaded. Processing started.")
 
 
 class CompressStatusResponse(BaseModel):
     """Response for compression job status."""
 
-    job_id: str
-    status: str
-    original_size: int | None = None
-    compressed_size: int | None = None
-    reduction_percent: float | None = None
-    download_url: str | None = None
-    expires_at: datetime | None = None
-    error_message: str | None = None
+    job_id: str = Field(..., description="Unique job identifier", example="550e8400-e29b-41d4-a716-446655440000")
+    status: str = Field(..., description="Job status (pending, processing, completed, failed)", example="completed")
+    original_size: int | None = Field(None, description="Original file size in bytes", example=5242880)
+    compressed_size: int | None = Field(None, description="Compressed file size in bytes", example=1048576)
+    reduction_percent: float | None = Field(None, description="Size reduction percentage", example=80.0)
+    download_url: str | None = Field(None, description="URL to download the compressed file", example="/api/v1/download/550e8400-e29b-41d4-a716-446655440000")
+    expires_at: datetime | None = Field(None, description="When the download link expires")
+    error_message: str | None = Field(None, description="Error message if job failed")
 
 
 async def process_compression(
@@ -93,7 +93,7 @@ async def process_compression(
         job.file_path = str(output_file)
         job.original_size = result.original_size
         job.output_size = result.compressed_size
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
     except Exception as e:
@@ -106,7 +106,7 @@ async def process_compression(
         file_manager.delete_file(Path(input_path))
 
 
-@router.post("/compress", response_model=CompressResponse)
+@router.post("/compress", status_code=status.HTTP_202_ACCEPTED, response_model=CompressResponse)
 async def compress_pdf(
     background_tasks: BackgroundTasks,
     file: Annotated[UploadFile, File(description="PDF file to compress")],

@@ -21,6 +21,42 @@ from app.services.file_manager import file_manager
 
 settings = get_settings()
 
+# OpenAPI tag descriptions for better documentation
+tags_metadata = [
+    {
+        "name": "compress",
+        "description": "Compress PDF files to reduce file size using Ghostscript.",
+    },
+    {
+        "name": "merge",
+        "description": "Merge multiple PDF files into a single document.",
+    },
+    {
+        "name": "image-to-pdf",
+        "description": "Convert images (JPG, PNG, WebP, etc.) to PDF documents.",
+    },
+    {
+        "name": "jobs",
+        "description": "Check job status and download processed files.",
+    },
+    {
+        "name": "auth",
+        "description": "User authentication and session management.",
+    },
+    {
+        "name": "billing",
+        "description": "Stripe billing and subscription management.",
+    },
+    {
+        "name": "api-keys",
+        "description": "API key management for Pro users.",
+    },
+    {
+        "name": "health",
+        "description": "Health check and API status endpoints.",
+    },
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,11 +84,33 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="SlimPDF API",
-    description="Server-side PDF toolkit for compression, merging, and image-to-PDF conversion.",
+    description="""
+## Server-side PDF toolkit
+
+SlimPDF provides powerful PDF processing tools:
+
+- **Compress** - Reduce PDF file size with customizable quality
+- **Merge** - Combine multiple PDFs into one
+- **Image to PDF** - Convert images to PDF documents
+
+### Authentication
+
+- **Free tier**: No authentication required, daily usage limits apply
+- **Pro tier**: JWT token or API key required, unlimited usage
+
+### Rate Limits
+
+| Tool | Free | Pro |
+|------|------|-----|
+| Compress | 2/day | Unlimited |
+| Merge | 2/day | Unlimited |
+| Image to PDF | 2/day | Unlimited |
+""",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
+    openapi_tags=tags_metadata,
 )
 
 # Configure CORS

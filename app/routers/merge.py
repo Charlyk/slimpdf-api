@@ -1,11 +1,11 @@
 """Merge PDF router."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -26,10 +26,10 @@ settings = get_settings()
 class MergeResponse(BaseModel):
     """Response for merge endpoint."""
 
-    job_id: str
-    status: str
-    message: str
-    file_count: int
+    job_id: str = Field(..., description="Unique job identifier", example="550e8400-e29b-41d4-a716-446655440000")
+    status: str = Field(..., description="Job status", example="pending")
+    message: str = Field(..., description="Status message", example="Files uploaded. Merge processing started.")
+    file_count: int = Field(..., description="Number of files being merged", example=3)
 
 
 async def process_merge(
@@ -71,7 +71,7 @@ async def process_merge(
         job.file_path = str(output_file)
         job.original_size = total_input_size
         job.output_size = result.output_size
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
     except Exception as e:
@@ -85,7 +85,7 @@ async def process_merge(
             file_manager.delete_file(Path(path))
 
 
-@router.post("/merge", response_model=MergeResponse)
+@router.post("/merge", status_code=status.HTTP_202_ACCEPTED, response_model=MergeResponse)
 async def merge_pdfs(
     background_tasks: BackgroundTasks,
     files: Annotated[

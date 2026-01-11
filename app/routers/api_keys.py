@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,29 +20,29 @@ router = APIRouter(prefix="/api/v1/keys", tags=["api-keys"])
 class ApiKeyResponse(BaseModel):
     """Response for API key info."""
 
-    id: str
-    name: str
-    key_prefix: str
-    created_at: datetime
-    last_used_at: datetime | None
-    is_active: bool
+    id: str = Field(..., description="API key ID", example="550e8400-e29b-41d4-a716-446655440000")
+    name: str = Field(..., description="API key name", example="Production Key")
+    key_prefix: str = Field(..., description="First 8 characters of the key", example="sk_live_")
+    created_at: datetime = Field(..., description="When the key was created")
+    last_used_at: datetime | None = Field(None, description="When the key was last used")
+    is_active: bool = Field(..., description="Whether the key is active", example=True)
 
 
 class ApiKeyCreateResponse(BaseModel):
     """Response when creating a new API key."""
 
-    id: str
-    name: str
-    key: str  # Full key - only shown once!
-    key_prefix: str
-    created_at: datetime
-    message: str
+    id: str = Field(..., description="API key ID", example="550e8400-e29b-41d4-a716-446655440000")
+    name: str = Field(..., description="API key name", example="Production Key")
+    key: str = Field(..., description="Full API key (shown only once!)", example="sk_live_abc123xyz789...")
+    key_prefix: str = Field(..., description="First 8 characters of the key", example="sk_live_")
+    created_at: datetime = Field(..., description="When the key was created")
+    message: str = Field(..., description="Important message about key storage", example="Store this key securely - it cannot be retrieved again!")
 
 
 class ApiKeyCreateRequest(BaseModel):
     """Request to create a new API key."""
 
-    name: str = "Default"
+    name: str = Field("Default", description="Name for the API key", example="Production Key")
 
 
 @router.get("", response_model=list[ApiKeyResponse])
@@ -75,7 +75,7 @@ async def list_api_keys(
     ]
 
 
-@router.post("", response_model=ApiKeyCreateResponse)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=ApiKeyCreateResponse)
 async def create_api_key(
     current_user: ProUser,
     request: ApiKeyCreateRequest,

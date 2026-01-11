@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -21,17 +21,17 @@ settings = get_settings()
 class JobStatusResponse(BaseModel):
     """Response for job status endpoint."""
 
-    job_id: str
-    status: str
-    tool: str
-    original_size: int | None = None
-    output_size: int | None = None
-    reduction_percent: float | None = None
-    download_url: str | None = None
-    expires_at: datetime | None = None
-    error_message: str | None = None
-    created_at: datetime
-    completed_at: datetime | None = None
+    job_id: str = Field(..., description="Unique job identifier", example="550e8400-e29b-41d4-a716-446655440000")
+    status: str = Field(..., description="Job status (pending, processing, completed, failed)", example="completed")
+    tool: str = Field(..., description="Tool used (compress, merge, image_to_pdf)", example="compress")
+    original_size: int | None = Field(None, description="Original file size in bytes", example=5242880)
+    output_size: int | None = Field(None, description="Output file size in bytes", example=1048576)
+    reduction_percent: float | None = Field(None, description="Size reduction percentage (for compression)", example=80.0)
+    download_url: str | None = Field(None, description="URL to download processed file", example="/api/v1/download/550e8400-e29b-41d4-a716-446655440000")
+    expires_at: datetime | None = Field(None, description="When the download link expires")
+    error_message: str | None = Field(None, description="Error message if job failed")
+    created_at: datetime = Field(..., description="When the job was created")
+    completed_at: datetime | None = Field(None, description="When the job completed")
 
 
 @router.get("/status/{job_id}", response_model=JobStatusResponse)
@@ -69,7 +69,7 @@ async def get_job_status(
     )
 
     # Add download URL if completed and not expired
-    if job.status == JobStatus.COMPLETED and not job.is_expired:
+    if job.status == JobStatus.COMPLETED.value and not job.is_expired:
         response.download_url = f"/api/v1/download/{job_id}"
 
     return response
@@ -96,19 +96,19 @@ async def download_file(
         raise http_not_found_error(f"Job {job_id} not found")
 
     # Check job status
-    if job.status == JobStatus.PENDING:
+    if job.status == JobStatus.PENDING.value:
         raise HTTPException(
             status_code=status.HTTP_202_ACCEPTED,
             detail="Job is still pending. Please wait.",
         )
 
-    if job.status == JobStatus.PROCESSING:
+    if job.status == JobStatus.PROCESSING.value:
         raise HTTPException(
             status_code=status.HTTP_202_ACCEPTED,
             detail="Job is still processing. Please wait.",
         )
 
-    if job.status == JobStatus.FAILED:
+    if job.status == JobStatus.FAILED.value:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Job failed: {job.error_message or 'Unknown error'}",

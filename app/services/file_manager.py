@@ -3,7 +3,7 @@
 import os
 import shutil
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import aiofiles
@@ -192,7 +192,7 @@ class FileManager:
             Datetime when file should expire
         """
         hours = settings.file_expiry_pro_hours if is_pro else settings.file_expiry_free_hours
-        return datetime.utcnow() + timedelta(hours=hours)
+        return datetime.now(timezone.utc) + timedelta(hours=hours)
 
 
 # Global instance

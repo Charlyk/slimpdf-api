@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import Text, DateTime, ForeignKey, BigInteger
@@ -51,7 +51,7 @@ class Job(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -60,7 +60,7 @@ class Job(Base):
     @property
     def is_expired(self) -> bool:
         """Check if job download has expired."""
-        return datetime.utcnow() > self.expires_at.replace(tzinfo=None)
+        return datetime.now(timezone.utc) > self.expires_at
 
     @property
     def reduction_percent(self) -> float | None:

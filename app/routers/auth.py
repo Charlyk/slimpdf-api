@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -22,26 +22,26 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 class UserResponse(BaseModel):
     """Response for user info endpoint."""
 
-    id: str
-    email: str | None
-    name: str | None
-    plan: str
-    is_pro: bool
+    id: str = Field(..., description="User ID", example="550e8400-e29b-41d4-a716-446655440000")
+    email: str | None = Field(None, description="User email address", example="user@example.com")
+    name: str | None = Field(None, description="User display name", example="John Doe")
+    plan: str = Field(..., description="Subscription plan (free, pro)", example="pro")
+    is_pro: bool = Field(..., description="Whether user has Pro subscription", example=True)
 
 
 class UsageResponse(BaseModel):
     """Response for usage info endpoint."""
 
-    compress: dict
-    merge: dict
-    image_to_pdf: dict
+    compress: dict = Field(..., description="Compression usage stats", example={"used": 1, "limit": 2, "remaining": 1})
+    merge: dict = Field(..., description="Merge usage stats", example={"used": 0, "limit": 2, "remaining": 2})
+    image_to_pdf: dict = Field(..., description="Image-to-PDF usage stats", example={"used": 2, "limit": 2, "remaining": 0})
 
 
 class MeResponse(BaseModel):
     """Response for /me endpoint."""
 
-    user: UserResponse
-    usage: UsageResponse
+    user: UserResponse = Field(..., description="User information")
+    usage: UsageResponse = Field(..., description="Today's usage statistics")
 
 
 @router.get("/me", response_model=MeResponse)

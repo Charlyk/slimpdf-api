@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+env
+
+# IDE
+.idea
+.vscode
+*.iml
+
+# Testing
+.pytest_cache
+htmlcov
+.coverage
+.tox
+
+# Documentation
+*.md
+!README.md
+
+# Local development
+.env
+.env.*
+!.env.example
+
+# Beads (issue tracker)
+.beads
+
+# Claude
+.claude
+
+# Temp files
+temp/
+tmp/
+uploads/
+processed/
+*.pdf
+*.log
+
+# macOS
+.DS_Store

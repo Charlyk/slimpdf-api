@@ -1,0 +1,196 @@
+"""Compress PDF router."""
+
+from datetime import datetime
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import get_settings
+from app.database import get_db
+from app.exceptions import (
+    http_file_size_limit_error,
+    http_file_processing_error,
+    http_invalid_file_type_error,
+)
+from app.models import Job, JobStatus, ToolType
+from app.services.compression import (
+    CompressionQuality,
+    CompressionService,
+    get_compression_service,
+)
+from app.services.file_manager import FileManager, get_file_manager
+
+router = APIRouter(prefix="/api/v1", tags=["compress"])
+settings = get_settings()
+
+
+class CompressResponse(BaseModel):
+    """Response for compress endpoint."""
+
+    job_id: str
+    status: str
+    message: str
+
+
+class CompressStatusResponse(BaseModel):
+    """Response for compression job status."""
+
+    job_id: str
+    status: str
+    original_size: int | None = None
+    compressed_size: int | None = None
+    reduction_percent: float | None = None
+    download_url: str | None = None
+    expires_at: datetime | None = None
+    error_message: str | None = None
+
+
+async def process_compression(
+    job_id: UUID,
+    input_path: str,
+    output_path: str,
+    quality: str,
+    target_size_mb: float | None,
+    db: AsyncSession,
+    compression_service: CompressionService,
+    file_manager: FileManager,
+) -> None:
+    """Background task to process PDF compression."""
+    from pathlib import Path
+
+    job = await db.get(Job, job_id)
+    if not job:
+        return
+
+    try:
+        # Update status to processing
+        job.status = JobStatus.PROCESSING
+        await db.commit()
+
+        input_file = Path(input_path)
+        output_file = Path(output_path)
+
+        # Perform compression
+        if target_size_mb:
+            result = await compression_service.compress_to_target_size(
+                input_path=input_file,
+                output_path=output_file,
+                target_size_mb=target_size_mb,
+            )
+        else:
+            result = await compression_service.compress(
+                input_path=input_file,
+                output_path=output_file,
+                quality=quality,
+            )
+
+        # Update job with results
+        job.status = JobStatus.COMPLETED
+        job.output_filename = output_file.name
+        job.file_path = str(output_file)
+        job.original_size = result.original_size
+        job.output_size = result.compressed_size
+        job.completed_at = datetime.utcnow()
+        await db.commit()
+
+    except Exception as e:
+        job.status = JobStatus.FAILED
+        job.error_message = str(e)
+        await db.commit()
+
+    finally:
+        # Clean up input file
+        file_manager.delete_file(Path(input_path))
+
+
+@router.post("/compress", response_model=CompressResponse)
+async def compress_pdf(
+    background_tasks: BackgroundTasks,
+    file: Annotated[UploadFile, File(description="PDF file to compress")],
+    quality: Annotated[
+        str,
+        Form(description="Compression quality: low, medium, high, maximum"),
+    ] = "medium",
+    target_size_mb: Annotated[
+        float | None,
+        Form(description="Target file size in MB (Pro only)"),
+    ] = None,
+    db: AsyncSession = Depends(get_db),
+    compression_service: CompressionService = Depends(get_compression_service),
+    file_manager: FileManager = Depends(get_file_manager),
+) -> CompressResponse:
+    """
+    Compress a PDF file.
+
+    Upload a PDF and receive a job ID. Use the job ID to check status
+    and download the compressed file when ready.
+
+    **Quality presets:**
+    - `low`: 72 DPI - smallest file size
+    - `medium`: 150 DPI - balanced (default)
+    - `high`: 300 DPI - better quality
+    - `maximum`: 300 DPI with color preservation
+
+    **Target size (Pro only):**
+    Set `target_size_mb` to compress to a specific file size.
+    """
+    # Validate file type
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise http_invalid_file_type_error("PDF", file.filename or "unknown")
+
+    # Validate quality
+    try:
+        quality_enum = CompressionQuality(quality.lower())
+    except ValueError:
+        quality_enum = CompressionQuality.MEDIUM
+
+    # TODO: Check user tier and apply limits
+    # For now, use free tier limits
+    max_size_mb = settings.max_file_size_free_mb
+    is_pro = False  # TODO: Get from auth
+
+    # Save uploaded file
+    input_path = await file_manager.save_upload(file)
+
+    # Check file size
+    file_size_mb = file_manager.get_file_size_mb(input_path)
+    if file_size_mb > max_size_mb:
+        file_manager.delete_file(input_path)
+        raise http_file_size_limit_error(max_size_mb, file_size_mb)
+
+    # Create output path
+    output_path = file_manager.create_output_path(file.filename)
+
+    # Create job record
+    job = Job(
+        tool=ToolType.COMPRESS,
+        status=JobStatus.PENDING,
+        input_filename=file.filename,
+        original_size=file_manager.get_file_size(input_path),
+        expires_at=file_manager.get_expiry_time(is_pro),
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    # Queue background processing
+    background_tasks.add_task(
+        process_compression,
+        job.id,
+        str(input_path),
+        str(output_path),
+        quality_enum.value,
+        target_size_mb,
+        db,
+        compression_service,
+        file_manager,
+    )
+
+    return CompressResponse(
+        job_id=str(job.id),
+        status="pending",
+        message="File uploaded. Processing started.",
+    )

@@ -14,7 +14,7 @@ from app.middleware.auth import ProUser
 from app.middleware.api_key import create_api_key_for_user, revoke_api_key
 from app.models import ApiKey
 
-router = APIRouter(prefix="/api/v1/keys", tags=["api-keys"])
+router = APIRouter(prefix="/v1/keys", tags=["api-keys"])
 
 
 class ApiKeyResponse(BaseModel):

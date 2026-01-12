@@ -14,7 +14,7 @@ from app.database import get_db
 from app.exceptions import http_not_found_error
 from app.models import Job, JobStatus
 
-router = APIRouter(prefix="/api/v1", tags=["jobs"])
+router = APIRouter(prefix="/v1", tags=["jobs"])
 settings = get_settings()
 
 
@@ -27,7 +27,7 @@ class JobStatusResponse(BaseModel):
     original_size: int | None = Field(None, description="Original file size in bytes", example=5242880)
     output_size: int | None = Field(None, description="Output file size in bytes", example=1048576)
     reduction_percent: float | None = Field(None, description="Size reduction percentage (for compression)", example=80.0)
-    download_url: str | None = Field(None, description="URL to download processed file", example="/api/v1/download/550e8400-e29b-41d4-a716-446655440000")
+    download_url: str | None = Field(None, description="URL to download processed file", example="/v1/download/550e8400-e29b-41d4-a716-446655440000")
     expires_at: datetime | None = Field(None, description="When the download link expires")
     error_message: str | None = Field(None, description="Error message if job failed")
     created_at: datetime = Field(..., description="When the job was created")
@@ -70,7 +70,7 @@ async def get_job_status(
 
     # Add download URL if completed and not expired
     if job.status == JobStatus.COMPLETED.value and not job.is_expired:
-        response.download_url = f"/api/v1/download/{job_id}"
+        response.download_url = f"/v1/download/{job_id}"
 
     return response
 

@@ -19,7 +19,7 @@ from app.models import Job, JobStatus, ToolType
 from app.services.merge import MergeService, get_merge_service
 from app.services.file_manager import FileManager, get_file_manager
 
-router = APIRouter(prefix="/api/v1", tags=["merge"])
+router = APIRouter(prefix="/v1", tags=["merge"])
 settings = get_settings()
 
 

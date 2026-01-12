@@ -23,7 +23,7 @@ from app.services.compression import (
 )
 from app.services.file_manager import FileManager, get_file_manager
 
-router = APIRouter(prefix="/api/v1", tags=["compress"])
+router = APIRouter(prefix="/v1", tags=["compress"])
 settings = get_settings()
 
 
@@ -43,7 +43,7 @@ class CompressStatusResponse(BaseModel):
     original_size: int | None = Field(None, description="Original file size in bytes", example=5242880)
     compressed_size: int | None = Field(None, description="Compressed file size in bytes", example=1048576)
     reduction_percent: float | None = Field(None, description="Size reduction percentage", example=80.0)
-    download_url: str | None = Field(None, description="URL to download the compressed file", example="/api/v1/download/550e8400-e29b-41d4-a716-446655440000")
+    download_url: str | None = Field(None, description="URL to download the compressed file", example="/v1/download/550e8400-e29b-41d4-a716-446655440000")
     expires_at: datetime | None = Field(None, description="When the download link expires")
     error_message: str | None = Field(None, description="Error message if job failed")
 

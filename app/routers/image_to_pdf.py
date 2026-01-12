@@ -23,7 +23,7 @@ from app.services.image_convert import (
 )
 from app.services.file_manager import FileManager, get_file_manager
 
-router = APIRouter(prefix="/api/v1", tags=["image-to-pdf"])
+router = APIRouter(prefix="/v1", tags=["image-to-pdf"])
 settings = get_settings()
 
 

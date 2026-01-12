@@ -2,21 +2,28 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_db
 from app.middleware.auth import (
     CurrentUser,
+    create_access_token,
     get_current_user,
     get_current_user_optional,
     OptionalUser,
     RequiredUser,
 )
+from app.services.google_auth import (
+    GoogleAuthError,
+    GoogleAuthService,
+    get_google_auth_service,
+)
 from app.services.usage import UsageService, get_usage_service
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 
 class UserResponse(BaseModel):
@@ -42,6 +49,22 @@ class MeResponse(BaseModel):
 
     user: UserResponse = Field(..., description="User information")
     usage: UsageResponse = Field(..., description="Today's usage statistics")
+
+
+class GoogleAuthRequest(BaseModel):
+    """Request for Google OAuth authentication."""
+
+    id_token: str = Field(..., description="Google ID token from frontend")
+
+
+class AuthTokenResponse(BaseModel):
+    """Response with backend JWT token."""
+
+    access_token: str = Field(..., description="Backend JWT access token")
+    token_type: str = Field(default="bearer", description="Token type")
+    expires_in: int = Field(..., description="Token expiration in seconds")
+    user: UserResponse = Field(..., description="Authenticated user info")
+    is_new_user: bool = Field(..., description="Whether this is a newly created account")
 
 
 @router.get("/me", response_model=MeResponse)
@@ -97,3 +120,45 @@ async def verify_token(
         "plan": "free",
         "is_pro": False,
     }
+
+
+@router.post("/google", response_model=AuthTokenResponse)
+async def google_auth(
+    request: GoogleAuthRequest,
+    db: AsyncSession = Depends(get_db),
+    google_service: GoogleAuthService = Depends(get_google_auth_service),
+) -> AuthTokenResponse:
+    """
+    Authenticate with Google OAuth.
+
+    Exchange a Google ID token for a backend JWT access token.
+    Creates a new user account if one doesn't exist.
+    """
+    try:
+        google_info = await google_service.verify_token(request.id_token)
+    except GoogleAuthError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+    user, is_new_user = await google_service.find_or_create_user(db, google_info)
+
+    settings = get_settings()
+    access_token = create_access_token(
+        user_id=str(user.id),
+        email=user.email,
+        name=user.name,
+        plan=user.plan,
+    )
+
+    return AuthTokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.jwt_expiry_hours * 3600,
+        user=UserResponse(
+            id=str(user.id),
+            email=user.email,
+            name=user.name,
+            plan=user.plan,
+            is_pro=user.is_pro,
+        ),
+        is_new_user=is_new_user,
+    )

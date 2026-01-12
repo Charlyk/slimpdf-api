@@ -13,7 +13,7 @@ from app.database import get_db
 from app.middleware.auth import RequiredUser
 from app.models import User, Subscription
 
-router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
+router = APIRouter(prefix="/v1/billing", tags=["billing"])
 settings = get_settings()
 
 # Initialize Stripe

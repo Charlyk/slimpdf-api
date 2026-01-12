@@ -19,12 +19,15 @@ class FileManager:
 
     def __init__(self, base_dir: str | None = None):
         self.base_dir = Path(base_dir or settings.temp_file_dir)
-        self._ensure_directories()
+        self._directories_initialized = False
 
     def _ensure_directories(self) -> None:
         """Create required directories if they don't exist."""
+        if self._directories_initialized:
+            return
         (self.base_dir / "uploads").mkdir(parents=True, exist_ok=True)
         (self.base_dir / "processed").mkdir(parents=True, exist_ok=True)
+        self._directories_initialized = True
 
     def _generate_filename(self, original_filename: str | None = None) -> str:
         """Generate a unique filename with UUID."""
@@ -37,11 +40,13 @@ class FileManager:
     @property
     def uploads_dir(self) -> Path:
         """Get the uploads directory path."""
+        self._ensure_directories()
         return self.base_dir / "uploads"
 
     @property
     def processed_dir(self) -> Path:
         """Get the processed files directory path."""
+        self._ensure_directories()
         return self.base_dir / "processed"
 
     async def save_upload(self, file: UploadFile) -> Path:

@@ -30,16 +30,21 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY migrations/ ./migrations/
 COPY alembic.ini* ./
+COPY entrypoint.sh ./
 
-# Create temp directories
+# Create temp directories and make entrypoint executable
 RUN mkdir -p /tmp/slimpdf/uploads /tmp/slimpdf/processed \
-    && chown -R appuser:appuser /tmp/slimpdf
+    && chown -R appuser:appuser /tmp/slimpdf \
+    && chmod +x entrypoint.sh
 
 # Change ownership of app directory
 RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
+
+# Use entrypoint to handle directory creation at runtime
+ENTRYPOINT ["./entrypoint.sh"]
 
 # Expose port
 EXPOSE 8000

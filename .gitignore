@@ -167,3 +167,5 @@ logs/
 .pydevproject
 .settings/
 *.orig
+packages/slimpdf-client/node_modules
+packages/slimpdf-client/dist

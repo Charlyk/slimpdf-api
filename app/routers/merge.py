@@ -18,6 +18,7 @@ from app.exceptions import (
 from app.models import Job, JobStatus, ToolType
 from app.services.merge import MergeService, get_merge_service
 from app.services.file_manager import FileManager, get_file_manager
+from app.middleware.rate_limit import MergeRateLimit
 
 router = APIRouter(prefix="/v1", tags=["merge"])
 settings = get_settings()
@@ -88,6 +89,7 @@ async def process_merge(
 @router.post("/merge", status_code=status.HTTP_202_ACCEPTED, response_model=MergeResponse)
 async def merge_pdfs(
     background_tasks: BackgroundTasks,
+    rate_limit: MergeRateLimit,
     files: Annotated[
         list[UploadFile],
         File(description="PDF files to merge (in order)"),
@@ -103,15 +105,19 @@ async def merge_pdfs(
     order they are uploaded. Use the job ID to check status and download
     the merged file when ready.
 
+    **Authentication:**
+    - No API key: Free tier limits apply (rate limited)
+    - With API key: Pro tier limits (unlimited)
+
     **Limits:**
-    - Free tier: Up to 5 PDFs, max 10MB each
-    - Pro tier: Up to 50 PDFs, max 50MB each
+    - Free tier: Up to 5 PDFs, max 20MB each
+    - Pro tier: Up to 50 PDFs, max 100MB each
     """
     if not files:
         raise http_invalid_file_type_error("PDF files", "no files")
 
-    # TODO: Check user tier and apply limits
-    is_pro = False
+    # Get tier limits from rate limiter
+    is_pro = rate_limit["is_pro"]
     max_files = settings.max_files_merge_pro if is_pro else settings.max_files_merge_free
     max_size_mb = settings.max_file_size_pro_mb if is_pro else settings.max_file_size_free_mb
 

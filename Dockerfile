@@ -16,9 +16,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash appuser
-
 # Set work directory
 WORKDIR /app
 
@@ -34,14 +31,7 @@ COPY entrypoint.sh ./
 
 # Create temp directories and make entrypoint executable
 RUN mkdir -p /tmp/slimpdf/uploads /tmp/slimpdf/processed \
-    && chown -R appuser:appuser /tmp/slimpdf \
     && chmod +x entrypoint.sh
-
-# Change ownership of app directory
-RUN chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
 
 # Use entrypoint to handle directory creation at runtime
 ENTRYPOINT ["./entrypoint.sh"]

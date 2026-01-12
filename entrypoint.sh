@@ -1,11 +1,6 @@
 #!/bin/bash
 set -e
 
-# Debug: show volume mount info
-echo "Debug: TEMP_FILE_DIR=$TEMP_FILE_DIR"
-ls -la /data 2>/dev/null || echo "Debug: /data does not exist or not accessible"
-id
-
 # Create temp directories if TEMP_FILE_DIR is set and writable
 if [ -n "$TEMP_FILE_DIR" ]; then
     mkdir -p "$TEMP_FILE_DIR/uploads" "$TEMP_FILE_DIR/processed" 2>/dev/null || {
@@ -14,6 +9,10 @@ if [ -n "$TEMP_FILE_DIR" ]; then
         mkdir -p "$TEMP_FILE_DIR/uploads" "$TEMP_FILE_DIR/processed"
     }
 fi
+
+# Run database migrations
+echo "Running database migrations..."
+alembic upgrade head
 
 # Execute the main command
 exec "$@"

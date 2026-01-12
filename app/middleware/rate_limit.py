@@ -4,14 +4,19 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
 from app.exceptions import RateLimitError, http_rate_limit_error
 from app.services.usage import UsageService, get_usage_service
+from app.middleware.api_key import get_api_key_user
+from app.middleware.auth import CurrentUser
 
 settings = get_settings()
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_client_ip(request: Request) -> str:
@@ -39,7 +44,7 @@ def get_client_ip(request: Request) -> str:
 
 
 class RateLimitChecker:
-    """Dependency for checking rate limits."""
+    """Dependency for checking rate limits with optional API key authentication."""
 
     def __init__(self, tool: str):
         self.tool = tool
@@ -47,22 +52,47 @@ class RateLimitChecker:
     async def __call__(
         self,
         request: Request,
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
         db: AsyncSession = Depends(get_db),
         usage_service: UsageService = Depends(get_usage_service),
     ) -> dict:
         """
         Check rate limit for the tool.
 
+        If a valid API key is provided, the user gets Pro access (no rate limits).
+        Otherwise, free tier rate limits are applied based on IP address.
+
         Returns user context if allowed, raises exception if rate limited.
         """
-        # TODO: Get user from auth if authenticated
         user_id: UUID | None = None
         is_pro = False
+        api_user: CurrentUser | None = None
+
+        # Try to authenticate via API key
+        if credentials and credentials.credentials.startswith("sk_"):
+            try:
+                api_user = await get_api_key_user(request, credentials, db)
+                if api_user:
+                    user_id = api_user.id
+                    is_pro = True
+            except Exception:
+                # Invalid API key - fall through to free tier
+                pass
 
         # Get client IP for anonymous rate limiting
         ip_address = get_client_ip(request)
 
-        # Check rate limit
+        # Pro users skip rate limiting
+        if is_pro:
+            return {
+                "user_id": user_id,
+                "ip_address": ip_address,
+                "is_pro": True,
+                "usage_count": 0,
+                "usage_limit": 0,  # 0 means unlimited
+            }
+
+        # Check rate limit for free tier
         allowed, current, limit = await usage_service.check_rate_limit(
             db=db,
             tool=self.tool,

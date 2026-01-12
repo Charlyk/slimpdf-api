@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     debug: bool = False
-    cors_origins: list[str] = ["https://slimpdf.io", "http://localhost:3000"]
+    cors_origins: list[str] = ["https://slimpdf.io", "https://dev.slimpdf.io", "http://localhost:3000"]
 
     # Database
     database_url: str = "postgresql://user:pass@localhost:5432/slimpdf"

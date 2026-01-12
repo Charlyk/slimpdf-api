@@ -22,6 +22,7 @@ from app.services.compression import (
     get_compression_service,
 )
 from app.services.file_manager import FileManager, get_file_manager
+from app.middleware.rate_limit import CompressRateLimit
 
 router = APIRouter(prefix="/v1", tags=["compress"])
 settings = get_settings()
@@ -109,6 +110,7 @@ async def process_compression(
 @router.post("/compress", status_code=status.HTTP_202_ACCEPTED, response_model=CompressResponse)
 async def compress_pdf(
     background_tasks: BackgroundTasks,
+    rate_limit: CompressRateLimit,
     file: Annotated[UploadFile, File(description="PDF file to compress")],
     quality: Annotated[
         str,
@@ -127,6 +129,10 @@ async def compress_pdf(
 
     Upload a PDF and receive a job ID. Use the job ID to check status
     and download the compressed file when ready.
+
+    **Authentication:**
+    - No API key: Free tier limits apply (rate limited)
+    - With API key: Pro tier limits (unlimited)
 
     **Quality presets:**
     - `low`: 72 DPI - smallest file size
@@ -147,10 +153,9 @@ async def compress_pdf(
     except ValueError:
         quality_enum = CompressionQuality.MEDIUM
 
-    # TODO: Check user tier and apply limits
-    # For now, use free tier limits
-    max_size_mb = settings.max_file_size_free_mb
-    is_pro = False  # TODO: Get from auth
+    # Get tier limits from rate limiter
+    is_pro = rate_limit["is_pro"]
+    max_size_mb = settings.max_file_size_pro_mb if is_pro else settings.max_file_size_free_mb
 
     # Save uploaded file
     input_path = await file_manager.save_upload(file)

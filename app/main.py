@@ -18,6 +18,7 @@ from app.routers import (
     api_keys_router,
 )
 from app.services.file_manager import file_manager
+from app.middleware.origin_validation import OriginValidationMiddleware
 
 settings = get_settings()
 
@@ -121,6 +122,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Origin validation for protected endpoints (auth, billing, api-keys)
+app.add_middleware(OriginValidationMiddleware)
 
 # Include routers
 app.include_router(compress_router)

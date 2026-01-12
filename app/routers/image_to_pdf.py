@@ -22,6 +22,7 @@ from app.services.image_convert import (
     get_image_convert_service,
 )
 from app.services.file_manager import FileManager, get_file_manager
+from app.middleware.rate_limit import ImageToPdfRateLimit
 
 router = APIRouter(prefix="/v1", tags=["image-to-pdf"])
 settings = get_settings()
@@ -106,6 +107,7 @@ async def process_image_to_pdf(
 @router.post("/image-to-pdf", status_code=status.HTTP_202_ACCEPTED, response_model=ImageToPdfResponse)
 async def convert_images_to_pdf(
     background_tasks: BackgroundTasks,
+    rate_limit: ImageToPdfRateLimit,
     files: Annotated[
         list[UploadFile],
         File(description="Image files to convert (in order)"),
@@ -125,6 +127,10 @@ async def convert_images_to_pdf(
     order they are uploaded. Use the job ID to check status and download
     the PDF when ready.
 
+    **Authentication:**
+    - No API key: Free tier limits apply (rate limited)
+    - With API key: Pro tier limits (unlimited)
+
     **Supported formats:** JPG, PNG, WebP, TIFF, BMP, GIF
 
     **Page sizes:**
@@ -139,8 +145,8 @@ async def convert_images_to_pdf(
     if not files:
         raise http_invalid_file_type_error("image files", "no files")
 
-    # TODO: Check user tier and apply limits
-    is_pro = False
+    # Get tier limits from rate limiter
+    is_pro = rate_limit["is_pro"]
     max_images = settings.max_images_pro if is_pro else settings.max_images_free
     max_size_mb = 20 if is_pro else 5  # Image size limits
 

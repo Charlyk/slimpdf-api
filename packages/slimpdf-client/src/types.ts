@@ -12,14 +12,36 @@ export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type ToolType = 'compress' | 'merge' | 'image_to_pdf';
 export type Plan = 'free' | 'pro';
 export type BillingInterval = 'month' | 'year';
+export type ApiEnvironment = 'development' | 'production';
+
+// ============================================================================
+// API URL Constants
+// ============================================================================
+
+/** Production API URL */
+export const API_URL_PRODUCTION = 'https://api.slimpdf.io';
+
+/** Development API URL */
+export const API_URL_DEVELOPMENT = 'https://dev.api.slimpdf.io';
 
 // ============================================================================
 // Client Configuration
 // ============================================================================
 
 export interface ClientOptions {
-  /** Base URL of the SlimPDF API (e.g., 'https://api.slimpdf.io') */
-  baseUrl: string;
+  /**
+   * Base URL of the SlimPDF API.
+   * If not provided, will be determined by the `environment` option.
+   * @example 'https://api.slimpdf.io'
+   */
+  baseUrl?: string;
+  /**
+   * API environment to use. Defaults to 'production'.
+   * - 'production': https://api.slimpdf.io
+   * - 'development': https://dev.api.slimpdf.io
+   * Ignored if `baseUrl` is provided.
+   */
+  environment?: ApiEnvironment;
   /** Optional access token (JWT or API key) for authenticated requests */
   accessToken?: string;
   /** Optional custom fetch function for testing or custom implementations */

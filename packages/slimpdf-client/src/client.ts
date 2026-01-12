@@ -3,6 +3,7 @@
  */
 
 import type { ClientOptions } from './types.js';
+import { API_URL_PRODUCTION, API_URL_DEVELOPMENT } from './types.js';
 import type { RequestContext } from './endpoints/base.js';
 import { CompressClient } from './endpoints/compress.js';
 import { MergeClient } from './endpoints/merge.js';
@@ -17,9 +18,16 @@ import { ApiKeysClient } from './endpoints/api-keys.js';
  *
  * @example
  * ```typescript
+ * // Using environment (recommended)
+ * const client = new SlimPdfClient({
+ *   environment: 'production', // or 'development'
+ *   accessToken: 'your-jwt-or-api-key', // optional
+ * });
+ *
+ * // Or with explicit baseUrl
  * const client = new SlimPdfClient({
  *   baseUrl: 'https://api.slimpdf.io',
- *   accessToken: 'your-jwt-or-api-key', // optional
+ *   accessToken: 'your-jwt-or-api-key',
  * });
  *
  * // Compress a PDF
@@ -58,12 +66,16 @@ export class SlimPdfClient {
   /** API key management (Pro) */
   readonly apiKeys: ApiKeysClient;
 
-  constructor(options: ClientOptions) {
+  constructor(options: ClientOptions = {}) {
     this._accessToken = options.accessToken;
+
+    // Resolve base URL: explicit baseUrl > environment > default to production
+    const baseUrl = options.baseUrl
+      ?? (options.environment === 'development' ? API_URL_DEVELOPMENT : API_URL_PRODUCTION);
 
     // Create request context
     this.ctx = {
-      baseUrl: options.baseUrl.replace(/\/$/, ''), // Remove trailing slash
+      baseUrl: baseUrl.replace(/\/$/, ''), // Remove trailing slash
       getAccessToken: () => this._accessToken,
       fetch: options.fetch || globalThis.fetch.bind(globalThis),
     };

@@ -20,6 +20,7 @@ from app.models import Job, JobStatus, ToolType
 from app.services.merge import MergeService, get_merge_service
 from app.services.file_manager import FileManager, get_file_manager
 from app.middleware.rate_limit import MergeRateLimit, set_rate_limit_headers
+from app.services.usage import UsageService, get_usage_service
 from app.i18n import get_translator, Messages
 
 router = APIRouter(prefix="/v1", tags=["merge"])
@@ -100,6 +101,7 @@ async def merge_pdfs(
     db: AsyncSession = Depends(get_db),
     merge_service: MergeService = Depends(get_merge_service),
     file_manager: FileManager = Depends(get_file_manager),
+    usage_service: UsageService = Depends(get_usage_service),
 ) -> MergeResponse:
     """
     Merge multiple PDF files into one.
@@ -140,6 +142,16 @@ async def merge_pdfs(
         raise http_file_size_limit_error(e.max_size_mb, e.actual_size_mb)
 
     total_size = sum(file_manager.get_file_size(p) for p in input_paths)
+
+    # Log usage for rate limiting (must happen after rate check passes)
+    await usage_service.log_usage(
+        db=db,
+        tool="merge",
+        user_id=rate_limit["user_id"],
+        ip_address=rate_limit["ip_address"],
+        input_size_bytes=total_size,
+        file_count=len(files),
+    )
 
     # Create output path
     output_path = file_manager.create_output_path(suffix=".pdf")

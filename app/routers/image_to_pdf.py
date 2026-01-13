@@ -24,6 +24,7 @@ from app.services.image_convert import (
 )
 from app.services.file_manager import FileManager, get_file_manager
 from app.middleware.rate_limit import ImageToPdfRateLimit, set_rate_limit_headers
+from app.services.usage import UsageService, get_usage_service
 from app.i18n import get_translator, Messages
 
 router = APIRouter(prefix="/v1", tags=["image-to-pdf"])
@@ -122,6 +123,7 @@ async def convert_images_to_pdf(
     db: AsyncSession = Depends(get_db),
     image_service: ImageConvertService = Depends(get_image_convert_service),
     file_manager: FileManager = Depends(get_file_manager),
+    usage_service: UsageService = Depends(get_usage_service),
 ) -> ImageToPdfResponse:
     """
     Convert images to a PDF document.
@@ -172,6 +174,16 @@ async def convert_images_to_pdf(
         raise http_file_size_limit_error(e.max_size_mb, e.actual_size_mb)
 
     total_size = sum(file_manager.get_file_size(p) for p in input_paths)
+
+    # Log usage for rate limiting (must happen after rate check passes)
+    await usage_service.log_usage(
+        db=db,
+        tool="image_to_pdf",
+        user_id=rate_limit["user_id"],
+        ip_address=rate_limit["ip_address"],
+        input_size_bytes=total_size,
+        file_count=len(files),
+    )
 
     # Create output path
     output_path = file_manager.create_output_path(suffix=".pdf")

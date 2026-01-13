@@ -41,6 +41,7 @@ export class ImageToPdfClient {
 
     return request<ImageToPdfResponse>(this.ctx, 'POST', '/v1/image-to-pdf', {
       body: formData,
+      includeRateLimit: true,
     });
   }
 

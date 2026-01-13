@@ -4,13 +4,14 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
 from app.exceptions import (
+    FileSizeLimitError,
     http_file_size_limit_error,
     http_file_processing_error,
     http_invalid_file_type_error,
@@ -22,7 +23,9 @@ from app.services.compression import (
     get_compression_service,
 )
 from app.services.file_manager import FileManager, get_file_manager
-from app.middleware.rate_limit import CompressRateLimit
+from app.middleware.rate_limit import CompressRateLimit, set_rate_limit_headers
+from app.services.usage import UsageService, get_usage_service
+from app.i18n import get_translator, Messages
 
 router = APIRouter(prefix="/v1", tags=["compress"])
 settings = get_settings()
@@ -109,6 +112,7 @@ async def process_compression(
 
 @router.post("/compress", status_code=status.HTTP_202_ACCEPTED, response_model=CompressResponse)
 async def compress_pdf(
+    response: Response,
     background_tasks: BackgroundTasks,
     rate_limit: CompressRateLimit,
     file: Annotated[UploadFile, File(description="PDF file to compress")],
@@ -123,6 +127,7 @@ async def compress_pdf(
     db: AsyncSession = Depends(get_db),
     compression_service: CompressionService = Depends(get_compression_service),
     file_manager: FileManager = Depends(get_file_manager),
+    usage_service: UsageService = Depends(get_usage_service),
 ) -> CompressResponse:
     """
     Compress a PDF file.
@@ -134,11 +139,14 @@ async def compress_pdf(
     - No API key: Free tier limits apply (rate limited)
     - With API key: Pro tier limits (unlimited)
 
-    **Quality presets:**
-    - `low`: 72 DPI - smallest file size
-    - `medium`: 150 DPI - balanced (default)
-    - `high`: 300 DPI - better quality
-    - `maximum`: 300 DPI with color preservation
+    **Quality presets (higher compression = lower quality):**
+    - `low`: Maximum compression, 50 DPI - smallest file size, works on already-compressed PDFs
+    - `medium`: High compression, 72 DPI (default) - good balance
+    - `high`: Medium compression, 100 DPI - better quality
+    - `maximum`: Light compression, 150 DPI - best quality
+
+    Note: If compression would increase file size, the original is returned.
+    Already-optimized PDFs may only compress with `low` quality.
 
     **Target size (Pro only):**
     Set `target_size_mb` to compress to a specific file size.
@@ -157,14 +165,20 @@ async def compress_pdf(
     is_pro = rate_limit["is_pro"]
     max_size_mb = settings.max_file_size_pro_mb if is_pro else settings.max_file_size_free_mb
 
-    # Save uploaded file
-    input_path = await file_manager.save_upload(file)
+    # Save uploaded file with size limit enforced during upload
+    try:
+        input_path = await file_manager.save_upload(file, max_size_mb=max_size_mb)
+    except FileSizeLimitError as e:
+        raise http_file_size_limit_error(e.max_size_mb, e.actual_size_mb)
 
-    # Check file size
-    file_size_mb = file_manager.get_file_size_mb(input_path)
-    if file_size_mb > max_size_mb:
-        file_manager.delete_file(input_path)
-        raise http_file_size_limit_error(max_size_mb, file_size_mb)
+    # Log usage for rate limiting (must happen after rate check passes)
+    await usage_service.log_usage(
+        db=db,
+        tool="compress",
+        user_id=rate_limit["user_id"],
+        ip_address=rate_limit["ip_address"],
+        input_size_bytes=file_manager.get_file_size(input_path),
+    )
 
     # Create output path
     output_path = file_manager.create_output_path(file.filename)
@@ -194,8 +208,11 @@ async def compress_pdf(
         file_manager,
     )
 
+    set_rate_limit_headers(response, rate_limit)
+
+    t = get_translator()
     return CompressResponse(
         job_id=str(job.id),
         status="pending",
-        message="File uploaded. Processing started.",
+        message=t(Messages.COMPRESS_STARTED),
     )

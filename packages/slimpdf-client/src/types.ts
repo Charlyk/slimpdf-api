@@ -6,6 +6,17 @@
 // Enums / Union Types
 // ============================================================================
 
+/**
+ * Compression quality preset.
+ * Higher compression = lower quality output.
+ *
+ * - `low`: Maximum compression, 50 DPI - smallest files, works on already-compressed PDFs
+ * - `medium`: High compression, 72 DPI - good balance (default)
+ * - `high`: Medium compression, 100 DPI - better quality
+ * - `maximum`: Light compression, 150 DPI - best quality
+ *
+ * Note: If compression would increase file size, the original is returned.
+ */
 export type CompressionQuality = 'low' | 'medium' | 'high' | 'maximum';
 export type PageSize = 'a4' | 'letter' | 'original';
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -28,6 +39,9 @@ export const API_URL_DEVELOPMENT = 'https://dev.api.slimpdf.io';
 // Client Configuration
 // ============================================================================
 
+/** Supported languages for API responses */
+export type SupportedLanguage = 'en' | 'es' | 'fr' | 'de' | 'pt' | 'it' | 'ja' | 'zh' | 'ko';
+
 export interface ClientOptions {
   /**
    * Base URL of the SlimPDF API.
@@ -44,6 +58,8 @@ export interface ClientOptions {
   environment?: ApiEnvironment;
   /** Optional access token (JWT or API key) for authenticated requests */
   accessToken?: string;
+  /** Optional language for API responses (default: 'en') */
+  language?: SupportedLanguage;
   /** Optional custom fetch function for testing or custom implementations */
   fetch?: typeof fetch;
 }
@@ -104,6 +120,23 @@ export interface VerifyResponse {
 }
 
 // ============================================================================
+// Rate Limiting
+// ============================================================================
+
+/**
+ * Rate limit information returned from API responses.
+ * Only present for free tier users - Pro users have unlimited access.
+ */
+export interface RateLimitInfo {
+  /** Maximum requests allowed per day */
+  limit: number;
+  /** Requests remaining in current period */
+  remaining: number;
+  /** Unix timestamp when the limit resets (midnight UTC) */
+  resetAt: number;
+}
+
+// ============================================================================
 // Job Responses
 // ============================================================================
 
@@ -111,6 +144,8 @@ export interface CompressResponse {
   job_id: string;
   status: string;
   message: string;
+  /** Rate limit info (only present for free tier users) */
+  rateLimit?: RateLimitInfo;
 }
 
 export interface MergeResponse {
@@ -118,6 +153,8 @@ export interface MergeResponse {
   status: string;
   message: string;
   file_count: number;
+  /** Rate limit info (only present for free tier users) */
+  rateLimit?: RateLimitInfo;
 }
 
 export interface ImageToPdfResponse {
@@ -125,6 +162,8 @@ export interface ImageToPdfResponse {
   status: string;
   message: string;
   image_count: number;
+  /** Rate limit info (only present for free tier users) */
+  rateLimit?: RateLimitInfo;
 }
 
 export interface JobStatusResponse {

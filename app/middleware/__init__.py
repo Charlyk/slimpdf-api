@@ -9,6 +9,7 @@ from app.middleware.rate_limit import (
     CompressRateLimit,
     MergeRateLimit,
     ImageToPdfRateLimit,
+    set_rate_limit_headers,
 )
 from app.middleware.file_validation import (
     FileSizeValidator,
@@ -43,6 +44,10 @@ from app.middleware.api_key import (
     ApiKeyUser,
     OptionalApiKeyUser,
 )
+from app.middleware.language import (
+    LanguageMiddleware,
+    parse_accept_language,
+)
 
 __all__ = [
     # Rate limiting
@@ -54,6 +59,7 @@ __all__ = [
     "CompressRateLimit",
     "MergeRateLimit",
     "ImageToPdfRateLimit",
+    "set_rate_limit_headers",
     # File validation
     "FileSizeValidator",
     "pdf_validator",
@@ -84,4 +90,7 @@ __all__ = [
     "revoke_api_key",
     "ApiKeyUser",
     "OptionalApiKeyUser",
+    # Language / i18n
+    "LanguageMiddleware",
+    "parse_accept_language",
 ]

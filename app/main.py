@@ -19,6 +19,7 @@ from app.routers import (
 )
 from app.services.file_manager import file_manager
 from app.middleware.origin_validation import OriginValidationMiddleware
+from app.middleware.language import LanguageMiddleware
 
 settings = get_settings()
 
@@ -125,6 +126,9 @@ app.add_middleware(
 
 # Origin validation for protected endpoints (auth, billing, api-keys)
 app.add_middleware(OriginValidationMiddleware)
+
+# Language detection for i18n (parses Accept-Language and X-Language headers)
+app.add_middleware(LanguageMiddleware)
 
 # Include routers
 app.include_router(compress_router)

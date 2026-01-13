@@ -2,8 +2,7 @@
  * SlimPDF Client - Main client class
  */
 
-import type { ClientOptions } from './types.js';
-import { API_URL_PRODUCTION, API_URL_DEVELOPMENT } from './types.js';
+import type { ClientOptions, SupportedLanguage } from './types.js';
 import type { RequestContext } from './endpoints/base.js';
 import { CompressClient } from './endpoints/compress.js';
 import { MergeClient } from './endpoints/merge.js';
@@ -22,6 +21,7 @@ import { ApiKeysClient } from './endpoints/api-keys.js';
  * const client = new SlimPdfClient({
  *   environment: 'production', // or 'development'
  *   accessToken: 'your-jwt-or-api-key', // optional
+ *   language: 'es', // optional, defaults to 'en'
  * });
  *
  * // Or with explicit baseUrl
@@ -43,6 +43,7 @@ import { ApiKeysClient } from './endpoints/api-keys.js';
  */
 export class SlimPdfClient {
   private _accessToken: string | undefined;
+  private _language: SupportedLanguage;
   private readonly ctx: RequestContext;
 
   /** Compress PDF files */
@@ -68,6 +69,7 @@ export class SlimPdfClient {
 
   constructor(options: ClientOptions = {}) {
     this._accessToken = options.accessToken;
+    this._language = options.language || 'en';
 
     // Resolve base URL: explicit baseUrl > environment > default to production
     const baseUrl = options.baseUrl
@@ -77,6 +79,7 @@ export class SlimPdfClient {
     this.ctx = {
       baseUrl: baseUrl.replace(/\/$/, ''), // Remove trailing slash
       getAccessToken: () => this._accessToken,
+      getLanguage: () => this._language,
       fetch: options.fetch || globalThis.fetch.bind(globalThis),
     };
 
@@ -110,5 +113,20 @@ export class SlimPdfClient {
    */
   get isAuthenticated(): boolean {
     return !!this._accessToken;
+  }
+
+  /**
+   * Set the language for API responses
+   * Supported: 'en', 'es', 'fr', 'de', 'pt', 'it', 'ja', 'zh', 'ko'
+   */
+  setLanguage(language: SupportedLanguage): void {
+    this._language = language;
+  }
+
+  /**
+   * Get the current language
+   */
+  get language(): SupportedLanguage {
+    return this._language;
   }
 }

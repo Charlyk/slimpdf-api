@@ -10,6 +10,7 @@ import aiofiles
 from fastapi import UploadFile
 
 from app.config import get_settings
+from app.exceptions import FileSizeLimitError
 
 settings = get_settings()
 
@@ -49,39 +50,81 @@ class FileManager:
         self._ensure_directories()
         return self.base_dir / "processed"
 
-    async def save_upload(self, file: UploadFile) -> Path:
+    async def save_upload(self, file: UploadFile, max_size_mb: float | None = None) -> Path:
         """
-        Save an uploaded file to the uploads directory.
+        Save an uploaded file to the uploads directory with optional size limit.
+
+        Streams the file in chunks and enforces the size limit during upload,
+        preventing large files from being fully written to disk.
 
         Args:
             file: FastAPI UploadFile object
+            max_size_mb: Maximum allowed file size in MB. If None, no limit is enforced.
 
         Returns:
             Path to the saved file
+
+        Raises:
+            FileSizeLimitError: If file exceeds max_size_mb during upload
         """
         filename = self._generate_filename(file.filename)
         file_path = self.uploads_dir / filename
 
-        async with aiofiles.open(file_path, "wb") as f:
-            content = await file.read()
-            await f.write(content)
+        max_size_bytes = int(max_size_mb * 1024 * 1024) if max_size_mb else None
+        total_bytes = 0
+        chunk_size = 64 * 1024  # 64KB chunks
+
+        try:
+            async with aiofiles.open(file_path, "wb") as f:
+                while True:
+                    chunk = await file.read(chunk_size)
+                    if not chunk:
+                        break
+
+                    total_bytes += len(chunk)
+
+                    # Check size limit before writing
+                    if max_size_bytes and total_bytes > max_size_bytes:
+                        raise FileSizeLimitError(
+                            max_size_mb=int(max_size_mb),
+                            actual_size_mb=total_bytes / (1024 * 1024),
+                        )
+
+                    await f.write(chunk)
+
+        except FileSizeLimitError:
+            # Clean up partial file
+            self.delete_file(file_path)
+            raise
 
         return file_path
 
-    async def save_uploads(self, files: list[UploadFile]) -> list[Path]:
+    async def save_uploads(
+        self, files: list[UploadFile], max_size_mb: float | None = None
+    ) -> list[Path]:
         """
-        Save multiple uploaded files.
+        Save multiple uploaded files with optional size limit per file.
 
         Args:
             files: List of FastAPI UploadFile objects
+            max_size_mb: Maximum allowed size per file in MB. If None, no limit.
 
         Returns:
             List of paths to saved files
+
+        Raises:
+            FileSizeLimitError: If any file exceeds max_size_mb. Previously saved
+                files from this batch are cleaned up before raising.
         """
         paths = []
-        for file in files:
-            path = await self.save_upload(file)
-            paths.append(path)
+        try:
+            for file in files:
+                path = await self.save_upload(file, max_size_mb)
+                paths.append(path)
+        except FileSizeLimitError:
+            # Clean up all files saved so far
+            self.delete_files(paths)
+            raise
         return paths
 
     def create_output_path(self, original_filename: str | None = None, suffix: str = ".pdf") -> Path:

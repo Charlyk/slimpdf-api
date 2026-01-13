@@ -2,6 +2,8 @@
 
 from fastapi import HTTPException, status
 
+from app.i18n import get_translator, Messages
+
 
 class SlimPDFException(Exception):
     """Base exception for SlimPDF."""
@@ -96,6 +98,9 @@ class FileCountLimitError(SlimPDFException):
 
 
 # HTTP Exception helpers for FastAPI
+# These use the translator from the current request context (set by LanguageMiddleware)
+
+
 def http_file_processing_error(detail: str) -> HTTPException:
     """Create HTTP 500 exception for file processing errors."""
     return HTTPException(
@@ -106,22 +111,27 @@ def http_file_processing_error(detail: str) -> HTTPException:
 
 def http_file_size_limit_error(max_size_mb: int, actual_size_mb: float) -> HTTPException:
     """Create HTTP 413 exception for file size limit errors."""
+    t = get_translator()
     return HTTPException(
         status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-        detail=f"File size {actual_size_mb:.1f}MB exceeds limit of {max_size_mb}MB",
+        detail=t(Messages.FILE_SIZE_EXCEEDED, max_size_mb=max_size_mb, actual_size_mb=actual_size_mb),
     )
 
 
 def http_rate_limit_error(tool: str, limit: int) -> HTTPException:
     """Create HTTP 429 exception for rate limit errors."""
+    t = get_translator()
     return HTTPException(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail=f"Daily limit of {limit} {tool} operations reached. Upgrade to Pro for unlimited access.",
+        detail=t(Messages.RATE_LIMIT_EXCEEDED, tool=tool, limit=limit),
     )
 
 
-def http_authentication_error(detail: str = "Authentication required") -> HTTPException:
+def http_authentication_error(detail: str | None = None) -> HTTPException:
     """Create HTTP 401 exception for authentication errors."""
+    if detail is None:
+        t = get_translator()
+        detail = t(Messages.AUTH_REQUIRED)
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=detail,
@@ -139,7 +149,43 @@ def http_not_found_error(detail: str) -> HTTPException:
 
 def http_invalid_file_type_error(expected: str, actual: str) -> HTTPException:
     """Create HTTP 400 exception for invalid file type errors."""
+    t = get_translator()
     return HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"Expected {expected} file, got {actual}",
+        detail=t(Messages.FILE_TYPE_INVALID, expected=expected, actual=actual),
+    )
+
+
+def http_file_count_limit_error(max_count: int, actual_count: int) -> HTTPException:
+    """Create HTTP 400 exception for file count limit errors."""
+    t = get_translator()
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=t(Messages.FILE_COUNT_EXCEEDED, max_count=max_count, actual_count=actual_count),
+    )
+
+
+def http_job_not_found_error(job_id: str) -> HTTPException:
+    """Create HTTP 404 exception for job not found errors."""
+    t = get_translator()
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=t(Messages.JOB_NOT_FOUND, job_id=job_id),
+    )
+
+
+def http_job_expired_error(job_id: str) -> HTTPException:
+    """Create HTTP 410 exception for expired job download links."""
+    t = get_translator()
+    return HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=t(Messages.JOB_EXPIRED, job_id=job_id),
+    )
+
+
+def http_forbidden_error(detail: str) -> HTTPException:
+    """Create HTTP 403 exception for forbidden access."""
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=detail,
     )

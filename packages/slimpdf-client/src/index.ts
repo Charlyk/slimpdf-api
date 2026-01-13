@@ -15,6 +15,7 @@ export type {
   // Config
   ClientOptions,
   PollOptions,
+  SupportedLanguage,
   // Enums
   CompressionQuality,
   PageSize,
@@ -30,6 +31,8 @@ export type {
   MeResponse,
   AuthTokenResponse,
   VerifyResponse,
+  // Rate Limiting
+  RateLimitInfo,
   // Jobs
   CompressResponse,
   MergeResponse,

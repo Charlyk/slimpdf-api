@@ -4,13 +4,14 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
 from app.exceptions import (
+    FileSizeLimitError,
     http_file_size_limit_error,
     http_invalid_file_type_error,
     FileCountLimitError,
@@ -22,7 +23,9 @@ from app.services.image_convert import (
     get_image_convert_service,
 )
 from app.services.file_manager import FileManager, get_file_manager
-from app.middleware.rate_limit import ImageToPdfRateLimit
+from app.middleware.rate_limit import ImageToPdfRateLimit, set_rate_limit_headers
+from app.services.usage import UsageService, get_usage_service
+from app.i18n import get_translator, Messages
 
 router = APIRouter(prefix="/v1", tags=["image-to-pdf"])
 settings = get_settings()
@@ -106,6 +109,7 @@ async def process_image_to_pdf(
 
 @router.post("/image-to-pdf", status_code=status.HTTP_202_ACCEPTED, response_model=ImageToPdfResponse)
 async def convert_images_to_pdf(
+    response: Response,
     background_tasks: BackgroundTasks,
     rate_limit: ImageToPdfRateLimit,
     files: Annotated[
@@ -119,6 +123,7 @@ async def convert_images_to_pdf(
     db: AsyncSession = Depends(get_db),
     image_service: ImageConvertService = Depends(get_image_convert_service),
     file_manager: FileManager = Depends(get_file_manager),
+    usage_service: UsageService = Depends(get_usage_service),
 ) -> ImageToPdfResponse:
     """
     Convert images to a PDF document.
@@ -162,30 +167,23 @@ async def convert_images_to_pdf(
                 f.filename or "unknown",
             )
 
-    # Save all uploaded files
-    input_paths = []
-    total_size = 0
-
+    # Save all uploaded files with size limit enforced during upload
     try:
-        for f in files:
-            path = await file_manager.save_upload(f)
-            input_paths.append(path)
+        input_paths = await file_manager.save_uploads(files, max_size_mb=max_size_mb)
+    except FileSizeLimitError as e:
+        raise http_file_size_limit_error(e.max_size_mb, e.actual_size_mb)
 
-            # Check individual file size
-            file_size_mb = file_manager.get_file_size_mb(path)
-            if file_size_mb > max_size_mb:
-                # Clean up already saved files
-                for p in input_paths:
-                    file_manager.delete_file(p)
-                raise http_file_size_limit_error(max_size_mb, file_size_mb)
+    total_size = sum(file_manager.get_file_size(p) for p in input_paths)
 
-            total_size += file_manager.get_file_size(path)
-
-    except Exception as e:
-        # Clean up on error
-        for p in input_paths:
-            file_manager.delete_file(p)
-        raise e
+    # Log usage for rate limiting (must happen after rate check passes)
+    await usage_service.log_usage(
+        db=db,
+        tool="image_to_pdf",
+        user_id=rate_limit["user_id"],
+        ip_address=rate_limit["ip_address"],
+        input_size_bytes=total_size,
+        file_count=len(files),
+    )
 
     # Create output path
     output_path = file_manager.create_output_path(suffix=".pdf")
@@ -214,9 +212,12 @@ async def convert_images_to_pdf(
         file_manager,
     )
 
+    set_rate_limit_headers(response, rate_limit)
+
+    t = get_translator()
     return ImageToPdfResponse(
         job_id=str(job.id),
         status="pending",
-        message="Images uploaded. Conversion started.",
+        message=t(Messages.IMAGE_TO_PDF_STARTED),
         image_count=len(files),
     )

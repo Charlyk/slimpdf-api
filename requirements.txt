@@ -17,7 +17,7 @@ pydantic-settings>=2.1.0
 # Authentication
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.1.2
-google-auth>=2.27.0
+firebase-admin>=6.4.0
 
 # PDF Processing
 pymupdf>=1.23.0

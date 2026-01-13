@@ -9,16 +9,24 @@ export class AuthClient {
   constructor(private ctx: RequestContext) {}
 
   /**
-   * Authenticate with Google OAuth
-   * Exchange a Google ID token for a SlimPDF JWT access token.
+   * Authenticate with Firebase
+   * Exchange a Firebase ID token for a SlimPDF JWT access token.
+   * Supports all Firebase auth providers (Google, Apple, email/password, etc.).
    *
-   * @param idToken - Google ID token from Google Sign-In
+   * @param idToken - Firebase ID token from Firebase Auth
    * @returns Auth response with access_token and user info
    */
-  async loginWithGoogle(idToken: string): Promise<AuthTokenResponse> {
-    return request<AuthTokenResponse>(this.ctx, 'POST', '/v1/auth/google', {
+  async loginWithFirebase(idToken: string): Promise<AuthTokenResponse> {
+    return request<AuthTokenResponse>(this.ctx, 'POST', '/v1/auth/firebase', {
       body: { id_token: idToken },
     });
+  }
+
+  /**
+   * @deprecated Use `loginWithFirebase` instead. This method will be removed in a future version.
+   */
+  async loginWithGoogle(idToken: string): Promise<AuthTokenResponse> {
+    return this.loginWithFirebase(idToken);
   }
 
   /**

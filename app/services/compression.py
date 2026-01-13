@@ -1,6 +1,7 @@
 """PDF compression service using Ghostscript."""
 
 import asyncio
+import shutil
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
@@ -10,19 +11,48 @@ from app.exceptions import FileProcessingError
 
 
 class CompressionQuality(str, Enum):
-    """Compression quality presets mapping to Ghostscript settings."""
+    """Compression quality presets.
 
-    LOW = "screen"      # 72 dpi - smallest file size
-    MEDIUM = "ebook"    # 150 dpi - balanced
-    HIGH = "printer"    # 300 dpi - high quality
-    MAXIMUM = "prepress"  # 300 dpi, color preserving
+    Note: Quality refers to OUTPUT quality, not compression level.
+    - LOW quality = Maximum compression, smallest files
+    - MAXIMUM quality = Minimal compression, best quality
+    """
+
+    LOW = "low"           # Maximum compression, 72 dpi
+    MEDIUM = "medium"     # Balanced, 150 dpi
+    HIGH = "high"         # Good quality, 200 dpi
+    MAXIMUM = "maximum"   # Best quality, 300 dpi
 
 
-# DPI values for each quality level
+# Settings for each quality level
+QUALITY_SETTINGS = {
+    CompressionQuality.LOW: {
+        "dpi": 72,
+        "jpeg_quality": 40,
+        "pdfsettings": "/screen",
+    },
+    CompressionQuality.MEDIUM: {
+        "dpi": 150,
+        "jpeg_quality": 60,
+        "pdfsettings": "/ebook",
+    },
+    CompressionQuality.HIGH: {
+        "dpi": 200,
+        "jpeg_quality": 75,
+        "pdfsettings": "/ebook",
+    },
+    CompressionQuality.MAXIMUM: {
+        "dpi": 300,
+        "jpeg_quality": 85,
+        "pdfsettings": "/printer",
+    },
+}
+
+# Backwards compatibility
 QUALITY_DPI = {
     CompressionQuality.LOW: 72,
     CompressionQuality.MEDIUM: 150,
-    CompressionQuality.HIGH: 300,
+    CompressionQuality.HIGH: 200,
     CompressionQuality.MAXIMUM: 300,
 }
 
@@ -92,14 +122,20 @@ class CompressionService:
         output_path: Path,
         quality: CompressionQuality | str,
         custom_dpi: int | None = None,
+        custom_jpeg_quality: int | None = None,
     ) -> list[str]:
         """Build Ghostscript command with appropriate settings."""
         # Get quality setting
         if isinstance(quality, str):
-            quality = CompressionQuality(quality)
+            try:
+                quality = CompressionQuality(quality)
+            except ValueError:
+                quality = CompressionQuality.MEDIUM
 
-        pdf_setting = f"/{quality.value}"
-        dpi = custom_dpi or QUALITY_DPI.get(quality, 150)
+        settings = QUALITY_SETTINGS.get(quality, QUALITY_SETTINGS[CompressionQuality.MEDIUM])
+        dpi = custom_dpi or settings["dpi"]
+        jpeg_quality = custom_jpeg_quality or settings["jpeg_quality"]
+        pdf_setting = settings["pdfsettings"]
 
         cmd = [
             self.gs_command,
@@ -109,13 +145,28 @@ class CompressionService:
             "-dNOPAUSE",
             "-dQUIET",
             "-dBATCH",
-            # Image downsampling settings
-            "-dDownsampleColorImages=true",
-            "-dDownsampleGrayImages=true",
-            "-dDownsampleMonoImages=true",
+            # Optimization flags
+            "-dDetectDuplicateImages=true",
+            "-dCompressFonts=true",
+            "-dSubsetFonts=true",
+            "-dEmbedAllFonts=true",
+            # Image compression settings
+            "-dAutoFilterColorImages=false",
+            "-dAutoFilterGrayImages=false",
+            "-dColorImageFilter=/DCTEncode",
+            "-dGrayImageFilter=/DCTEncode",
             f"-dColorImageResolution={dpi}",
             f"-dGrayImageResolution={dpi}",
             f"-dMonoImageResolution={dpi}",
+            # Image downsampling
+            "-dDownsampleColorImages=true",
+            "-dDownsampleGrayImages=true",
+            "-dDownsampleMonoImages=true",
+            "-dColorImageDownsampleType=/Bicubic",
+            "-dGrayImageDownsampleType=/Bicubic",
+            "-dMonoImageDownsampleType=/Bicubic",
+            # JPEG quality (0-100, lower = more compression)
+            f"-dJPEGQ={jpeg_quality}",
             # Output
             f"-sOutputFile={output_path}",
             str(input_path),
@@ -128,6 +179,7 @@ class CompressionService:
         output_path: Path,
         quality: CompressionQuality | str = CompressionQuality.MEDIUM,
         custom_dpi: int | None = None,
+        custom_jpeg_quality: int | None = None,
     ) -> CompressionResult:
         """
         Compress a PDF file using Ghostscript.
@@ -137,9 +189,11 @@ class CompressionService:
             output_path: Path for compressed output
             quality: Compression quality preset
             custom_dpi: Optional custom DPI override
+            custom_jpeg_quality: Optional custom JPEG quality (0-100)
 
         Returns:
-            CompressionResult with output path and statistics
+            CompressionResult with output path and statistics.
+            If compression results in a larger file, returns the original file.
 
         Raises:
             FileProcessingError: If compression fails
@@ -155,9 +209,15 @@ class CompressionService:
                 quality = CompressionQuality.MEDIUM
 
         original_size = input_path.stat().st_size
-        dpi = custom_dpi or QUALITY_DPI.get(quality, 150)
+        settings = QUALITY_SETTINGS.get(quality, QUALITY_SETTINGS[CompressionQuality.MEDIUM])
+        dpi = custom_dpi or settings["dpi"]
 
-        cmd = self._build_gs_command(input_path, output_path, quality, custom_dpi)
+        # Use a temporary path for compression
+        temp_output = output_path.with_suffix(".temp.pdf")
+
+        cmd = self._build_gs_command(
+            input_path, temp_output, quality, custom_dpi, custom_jpeg_quality
+        )
 
         try:
             # Run Ghostscript asynchronously
@@ -172,10 +232,25 @@ class CompressionService:
                 error_msg = stderr.decode() if stderr else "Unknown error"
                 raise FileProcessingError(f"Ghostscript failed: {error_msg}")
 
-            if not output_path.exists():
+            if not temp_output.exists():
                 raise FileProcessingError("Compression produced no output file")
 
-            compressed_size = output_path.stat().st_size
+            compressed_size = temp_output.stat().st_size
+
+            # If compression made file bigger, use original instead
+            if compressed_size >= original_size:
+                temp_output.unlink()
+                shutil.copy2(input_path, output_path)
+                return CompressionResult(
+                    output_path=output_path,
+                    original_size=original_size,
+                    compressed_size=original_size,
+                    quality=quality.value,
+                    dpi=dpi,
+                )
+
+            # Use compressed file
+            temp_output.rename(output_path)
 
             return CompressionResult(
                 output_path=output_path,
@@ -187,10 +262,14 @@ class CompressionService:
 
         except asyncio.CancelledError:
             # Clean up partial output if cancelled
+            if temp_output.exists():
+                temp_output.unlink()
             if output_path.exists():
                 output_path.unlink()
             raise
         except subprocess.SubprocessError as e:
+            if temp_output.exists():
+                temp_output.unlink()
             raise FileProcessingError(f"Failed to run Ghostscript: {e}")
 
     async def compress_to_target_size(

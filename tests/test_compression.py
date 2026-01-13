@@ -17,17 +17,17 @@ class TestCompressionQuality:
     """Tests for compression quality settings."""
 
     def test_quality_values(self):
-        """Test quality enum values match Ghostscript settings."""
-        assert CompressionQuality.LOW.value == "screen"
-        assert CompressionQuality.MEDIUM.value == "ebook"
-        assert CompressionQuality.HIGH.value == "printer"
-        assert CompressionQuality.MAXIMUM.value == "prepress"
+        """Test quality enum values."""
+        assert CompressionQuality.LOW.value == "low"
+        assert CompressionQuality.MEDIUM.value == "medium"
+        assert CompressionQuality.HIGH.value == "high"
+        assert CompressionQuality.MAXIMUM.value == "maximum"
 
     def test_quality_dpi_mapping(self):
         """Test DPI values for each quality level."""
         assert QUALITY_DPI[CompressionQuality.LOW] == 72
         assert QUALITY_DPI[CompressionQuality.MEDIUM] == 150
-        assert QUALITY_DPI[CompressionQuality.HIGH] == 300
+        assert QUALITY_DPI[CompressionQuality.HIGH] == 200
         assert QUALITY_DPI[CompressionQuality.MAXIMUM] == 300
 
 
@@ -124,6 +124,7 @@ class TestCompressionService:
     async def test_compress_success(self, service, sample_pdf_path: Path, temp_dir: Path):
         """Test successful compression."""
         output_path = temp_dir / "output.pdf"
+        temp_output = output_path.with_suffix(".temp.pdf")
 
         # Mock subprocess execution
         with patch('asyncio.create_subprocess_exec') as mock_exec:
@@ -132,8 +133,8 @@ class TestCompressionService:
             mock_process.communicate = AsyncMock(return_value=(b"", b""))
             mock_exec.return_value = mock_process
 
-            # Create output file to simulate Ghostscript output
-            output_path.write_bytes(b"compressed pdf content")
+            # Create temp output file to simulate Ghostscript output (smaller than original)
+            temp_output.write_bytes(b"x" * 10)  # Small file to ensure compression is used
 
             result = await service.compress(
                 sample_pdf_path,
@@ -142,7 +143,7 @@ class TestCompressionService:
             )
 
             assert result.output_path == output_path
-            assert result.quality == "ebook"
+            assert result.quality == "medium"
             assert result.dpi == 150
 
     @pytest.mark.asyncio
@@ -165,6 +166,7 @@ class TestCompressionService:
     ):
         """Test target size compression when file is already small enough."""
         output_path = temp_dir / "output.pdf"
+        temp_output = output_path.with_suffix(".temp.pdf")
 
         with patch('asyncio.create_subprocess_exec') as mock_exec:
             mock_process = AsyncMock()
@@ -172,8 +174,8 @@ class TestCompressionService:
             mock_process.communicate = AsyncMock(return_value=(b"", b""))
             mock_exec.return_value = mock_process
 
-            # Create smaller output file
-            output_path.write_bytes(b"x" * 100)
+            # Create smaller temp output file (compress uses temp file first)
+            temp_output.write_bytes(b"x" * 10)
 
             result = await service.compress_to_target_size(
                 sample_pdf_path,
@@ -192,7 +194,39 @@ class TestCompressionService:
         cmd = service._build_gs_command(
             input_path,
             output_path,
-            "ebook",  # String value of CompressionQuality.MEDIUM
+            "medium",  # String value of CompressionQuality.MEDIUM
         )
 
         assert "-dPDFSETTINGS=/ebook" in cmd
+
+    @pytest.mark.asyncio
+    async def test_compress_returns_original_when_larger(
+        self, service, sample_pdf_path: Path, temp_dir: Path
+    ):
+        """Test that original file is returned if compression makes it bigger."""
+        output_path = temp_dir / "output.pdf"
+        temp_output = output_path.with_suffix(".temp.pdf")
+
+        original_size = sample_pdf_path.stat().st_size
+
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            mock_process = AsyncMock()
+            mock_process.returncode = 0
+            mock_process.communicate = AsyncMock(return_value=(b"", b""))
+            mock_exec.return_value = mock_process
+
+            # Create temp output that is LARGER than original
+            temp_output.write_bytes(b"x" * (original_size + 1000))
+
+            result = await service.compress(
+                sample_pdf_path,
+                output_path,
+                CompressionQuality.MEDIUM,
+            )
+
+            # Should return original size (compression was not used)
+            assert result.compressed_size == original_size
+            assert result.original_size == original_size
+            assert result.reduction_percent == 0.0
+            # Temp file should be deleted
+            assert not temp_output.exists()

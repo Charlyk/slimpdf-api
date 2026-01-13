@@ -139,11 +139,13 @@ async def compress_pdf(
     - No API key: Free tier limits apply (rate limited)
     - With API key: Pro tier limits (unlimited)
 
-    **Quality presets:**
-    - `low`: 72 DPI - smallest file size
-    - `medium`: 150 DPI - balanced (default)
-    - `high`: 300 DPI - better quality
-    - `maximum`: 300 DPI with color preservation
+    **Quality presets (higher compression = lower quality):**
+    - `low`: Maximum compression, 72 DPI - smallest file size
+    - `medium`: Balanced compression, 150 DPI (default)
+    - `high`: Light compression, 200 DPI - good quality
+    - `maximum`: Minimal compression, 300 DPI - best quality
+
+    Note: If compression would increase file size, the original is returned.
 
     **Target size (Pro only):**
     Set `target_size_mb` to compress to a specific file size.

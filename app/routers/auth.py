@@ -16,10 +16,10 @@ from app.middleware.auth import (
     OptionalUser,
     RequiredUser,
 )
-from app.services.google_auth import (
-    GoogleAuthError,
-    GoogleAuthService,
-    get_google_auth_service,
+from app.services.firebase_auth import (
+    FirebaseAuthError,
+    FirebaseAuthService,
+    get_firebase_auth_service,
 )
 from app.services.usage import UsageService, get_usage_service
 
@@ -51,10 +51,10 @@ class MeResponse(BaseModel):
     usage: UsageResponse = Field(..., description="Today's usage statistics")
 
 
-class GoogleAuthRequest(BaseModel):
-    """Request for Google OAuth authentication."""
+class FirebaseAuthRequest(BaseModel):
+    """Request for Firebase authentication."""
 
-    id_token: str = Field(..., description="Google ID token from frontend")
+    id_token: str = Field(..., description="Firebase ID token from frontend")
 
 
 class AuthTokenResponse(BaseModel):
@@ -122,24 +122,25 @@ async def verify_token(
     }
 
 
-@router.post("/google", response_model=AuthTokenResponse)
-async def google_auth(
-    request: GoogleAuthRequest,
+@router.post("/firebase", response_model=AuthTokenResponse)
+async def firebase_auth(
+    request: FirebaseAuthRequest,
     db: AsyncSession = Depends(get_db),
-    google_service: GoogleAuthService = Depends(get_google_auth_service),
+    firebase_service: FirebaseAuthService = Depends(get_firebase_auth_service),
 ) -> AuthTokenResponse:
     """
-    Authenticate with Google OAuth.
+    Authenticate with Firebase.
 
-    Exchange a Google ID token for a backend JWT access token.
+    Exchange a Firebase ID token for a backend JWT access token.
+    Supports all Firebase auth providers (Google, Apple, email/password, etc.).
     Creates a new user account if one doesn't exist.
     """
     try:
-        google_info = await google_service.verify_token(request.id_token)
-    except GoogleAuthError as e:
+        firebase_info = await firebase_service.verify_token(request.id_token)
+    except FirebaseAuthError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
-    user, is_new_user = await google_service.find_or_create_user(db, google_info)
+    user, is_new_user = await firebase_service.find_or_create_user(db, firebase_info)
 
     settings = get_settings()
     access_token = create_access_token(

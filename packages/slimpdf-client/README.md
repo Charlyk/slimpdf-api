@@ -27,7 +27,7 @@ const compressedPdf = await result.download();
 - **Compress** - Reduce PDF file size with customizable quality
 - **Merge** - Combine multiple PDFs into one
 - **Image to PDF** - Convert images to PDF documents
-- **Authentication** - Google OAuth and API key support
+- **Authentication** - Firebase Auth and API key support
 - **Billing** - Stripe integration for Pro subscriptions
 - **API Keys** - Manage API keys for programmatic access (Pro)
 
@@ -86,8 +86,8 @@ const pdf = await result.download();
 ### Authentication
 
 ```typescript
-// Login with Google
-const auth = await client.auth.loginWithGoogle(googleIdToken);
+// Login with Firebase (supports Google, Apple, email/password, etc.)
+const auth = await client.auth.loginWithFirebase(firebaseIdToken);
 client.setAccessToken(auth.access_token);
 
 // Get current user info

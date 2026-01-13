@@ -1,6 +1,6 @@
 {
   "name": "@slimpdf/client",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "TypeScript client SDK for SlimPDF API",
   "type": "module",
   "main": "./dist/index.cjs",

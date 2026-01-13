@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiry_hours: int = 24
 
-    # Google OAuth
-    google_client_id: str = ""
+    # Firebase Authentication
+    firebase_credentials_json: str = ""  # JSON string of service account credentials
 
     # Stripe
     stripe_secret_key: str = ""

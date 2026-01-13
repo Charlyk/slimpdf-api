@@ -3,6 +3,7 @@
  */
 
 import type { ClientOptions, SupportedLanguage } from './types.js';
+import { API_URL_DEVELOPMENT, API_URL_PRODUCTION } from './types.js';
 import type { RequestContext } from './endpoints/base.js';
 import { CompressClient } from './endpoints/compress.js';
 import { MergeClient } from './endpoints/merge.js';
@@ -58,7 +59,7 @@ export class SlimPdfClient {
   /** Check job status and download files */
   readonly jobs: JobsClient;
 
-  /** Authentication (Google OAuth) */
+  /** Authentication (Firebase) */
   readonly auth: AuthClient;
 
   /** Billing (Stripe) */

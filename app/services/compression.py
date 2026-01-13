@@ -25,25 +25,26 @@ class CompressionQuality(str, Enum):
 
 
 # Settings for each quality level
+# QFactor: 0.0 = best quality, larger values = more compression (max ~2.5)
 QUALITY_SETTINGS = {
     CompressionQuality.LOW: {
         "dpi": 72,
-        "jpeg_quality": 40,
+        "qfactor": 1.5,  # High compression
         "pdfsettings": "/screen",
     },
     CompressionQuality.MEDIUM: {
-        "dpi": 150,
-        "jpeg_quality": 60,
+        "dpi": 120,
+        "qfactor": 0.76,  # Medium compression
         "pdfsettings": "/ebook",
     },
     CompressionQuality.HIGH: {
-        "dpi": 200,
-        "jpeg_quality": 75,
+        "dpi": 150,
+        "qfactor": 0.4,  # Light compression
         "pdfsettings": "/ebook",
     },
     CompressionQuality.MAXIMUM: {
-        "dpi": 300,
-        "jpeg_quality": 85,
+        "dpi": 200,
+        "qfactor": 0.15,  # Minimal compression, best quality
         "pdfsettings": "/printer",
     },
 }
@@ -51,9 +52,9 @@ QUALITY_SETTINGS = {
 # Backwards compatibility
 QUALITY_DPI = {
     CompressionQuality.LOW: 72,
-    CompressionQuality.MEDIUM: 150,
-    CompressionQuality.HIGH: 200,
-    CompressionQuality.MAXIMUM: 300,
+    CompressionQuality.MEDIUM: 120,
+    CompressionQuality.HIGH: 150,
+    CompressionQuality.MAXIMUM: 200,
 }
 
 
@@ -122,7 +123,7 @@ class CompressionService:
         output_path: Path,
         quality: CompressionQuality | str,
         custom_dpi: int | None = None,
-        custom_jpeg_quality: int | None = None,
+        custom_qfactor: float | None = None,
     ) -> list[str]:
         """Build Ghostscript command with appropriate settings."""
         # Get quality setting
@@ -134,8 +135,17 @@ class CompressionService:
 
         settings = QUALITY_SETTINGS.get(quality, QUALITY_SETTINGS[CompressionQuality.MEDIUM])
         dpi = custom_dpi or settings["dpi"]
-        jpeg_quality = custom_jpeg_quality or settings["jpeg_quality"]
+        qfactor = custom_qfactor or settings["qfactor"]
         pdf_setting = settings["pdfsettings"]
+
+        # Build PostScript command for JPEG quality settings
+        # QFactor: 0.0 = best quality, higher = more compression
+        ps_quality_settings = (
+            f"<< /ColorACSImageDict << /QFactor {qfactor} /Blend 1 "
+            f"/HSamples [1 1 1 1] /VSamples [1 1 1 1] >> "
+            f"/GrayACSImageDict << /QFactor {qfactor} /Blend 1 "
+            f"/HSamples [1 1 1 1] /VSamples [1 1 1 1] >> >> setdistillerparams"
+        )
 
         cmd = [
             self.gs_command,
@@ -145,11 +155,14 @@ class CompressionService:
             "-dNOPAUSE",
             "-dQUIET",
             "-dBATCH",
+            # Output file (must be before -c/-f)
+            f"-sOutputFile={output_path}",
             # Optimization flags
             "-dDetectDuplicateImages=true",
             "-dCompressFonts=true",
             "-dSubsetFonts=true",
-            "-dEmbedAllFonts=true",
+            "-dEmbedAllFonts=false",  # Don't embed fonts already in the system
+            "-dPrinted=false",  # Optimize for screen viewing
             # Image compression settings
             "-dAutoFilterColorImages=false",
             "-dAutoFilterGrayImages=false",
@@ -158,18 +171,22 @@ class CompressionService:
             f"-dColorImageResolution={dpi}",
             f"-dGrayImageResolution={dpi}",
             f"-dMonoImageResolution={dpi}",
-            # Image downsampling
+            # Image downsampling - force it even if image is smaller
             "-dDownsampleColorImages=true",
             "-dDownsampleGrayImages=true",
             "-dDownsampleMonoImages=true",
             "-dColorImageDownsampleType=/Bicubic",
             "-dGrayImageDownsampleType=/Bicubic",
             "-dMonoImageDownsampleType=/Bicubic",
-            # JPEG quality (0-100, lower = more compression)
-            f"-dJPEGQ={jpeg_quality}",
-            # Output
-            f"-sOutputFile={output_path}",
-            str(input_path),
+            "-dColorImageDownsampleThreshold=1.0",
+            "-dGrayImageDownsampleThreshold=1.0",
+            "-dMonoImageDownsampleThreshold=1.0",
+            # PassThroughJPEGImages=false forces re-encoding of JPEGs
+            "-dPassThroughJPEGImages=false",
+            # PostScript command for JPEG quality
+            "-c", ps_quality_settings,
+            # Input file flag and input file
+            "-f", str(input_path),
         ]
         return cmd
 
@@ -179,7 +196,7 @@ class CompressionService:
         output_path: Path,
         quality: CompressionQuality | str = CompressionQuality.MEDIUM,
         custom_dpi: int | None = None,
-        custom_jpeg_quality: int | None = None,
+        custom_qfactor: float | None = None,
     ) -> CompressionResult:
         """
         Compress a PDF file using Ghostscript.
@@ -189,7 +206,7 @@ class CompressionService:
             output_path: Path for compressed output
             quality: Compression quality preset
             custom_dpi: Optional custom DPI override
-            custom_jpeg_quality: Optional custom JPEG quality (0-100)
+            custom_qfactor: Optional custom QFactor (0.0=best quality, higher=more compression)
 
         Returns:
             CompressionResult with output path and statistics.
@@ -216,7 +233,7 @@ class CompressionService:
         temp_output = output_path.with_suffix(".temp.pdf")
 
         cmd = self._build_gs_command(
-            input_path, temp_output, quality, custom_dpi, custom_jpeg_quality
+            input_path, temp_output, quality, custom_dpi, custom_qfactor
         )
 
         try:

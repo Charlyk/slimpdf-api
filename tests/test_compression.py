@@ -26,9 +26,9 @@ class TestCompressionQuality:
     def test_quality_dpi_mapping(self):
         """Test DPI values for each quality level."""
         assert QUALITY_DPI[CompressionQuality.LOW] == 72
-        assert QUALITY_DPI[CompressionQuality.MEDIUM] == 150
-        assert QUALITY_DPI[CompressionQuality.HIGH] == 200
-        assert QUALITY_DPI[CompressionQuality.MAXIMUM] == 300
+        assert QUALITY_DPI[CompressionQuality.MEDIUM] == 120
+        assert QUALITY_DPI[CompressionQuality.HIGH] == 150
+        assert QUALITY_DPI[CompressionQuality.MAXIMUM] == 200
 
 
 class TestCompressionResult:
@@ -144,7 +144,7 @@ class TestCompressionService:
 
             assert result.output_path == output_path
             assert result.quality == "medium"
-            assert result.dpi == 150
+            assert result.dpi == 120
 
     @pytest.mark.asyncio
     async def test_compress_ghostscript_failure(self, service, sample_pdf_path: Path, temp_dir: Path):

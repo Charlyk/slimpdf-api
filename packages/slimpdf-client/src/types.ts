@@ -6,6 +6,15 @@
 // Enums / Union Types
 // ============================================================================
 
+/**
+ * Compression quality preset.
+ * Higher compression = lower quality output.
+ *
+ * - `low`: Maximum compression, 72 DPI (~80-90% size reduction)
+ * - `medium`: Balanced compression, 120 DPI (~70-80% reduction) - default
+ * - `high`: Light compression, 150 DPI (~60-70% reduction)
+ * - `maximum`: Minimal compression, 200 DPI (~50-60% reduction) - best quality
+ */
 export type CompressionQuality = 'low' | 'medium' | 'high' | 'maximum';
 export type PageSize = 'a4' | 'letter' | 'original';
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';

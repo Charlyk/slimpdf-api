@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.exceptions import (
+    FileSizeLimitError,
     http_file_size_limit_error,
     http_invalid_file_type_error,
     FileCountLimitError,
@@ -162,30 +163,13 @@ async def convert_images_to_pdf(
                 f.filename or "unknown",
             )
 
-    # Save all uploaded files
-    input_paths = []
-    total_size = 0
-
+    # Save all uploaded files with size limit enforced during upload
     try:
-        for f in files:
-            path = await file_manager.save_upload(f)
-            input_paths.append(path)
+        input_paths = await file_manager.save_uploads(files, max_size_mb=max_size_mb)
+    except FileSizeLimitError as e:
+        raise http_file_size_limit_error(e.max_size_mb, e.actual_size_mb)
 
-            # Check individual file size
-            file_size_mb = file_manager.get_file_size_mb(path)
-            if file_size_mb > max_size_mb:
-                # Clean up already saved files
-                for p in input_paths:
-                    file_manager.delete_file(p)
-                raise http_file_size_limit_error(max_size_mb, file_size_mb)
-
-            total_size += file_manager.get_file_size(path)
-
-    except Exception as e:
-        # Clean up on error
-        for p in input_paths:
-            file_manager.delete_file(p)
-        raise e
+    total_size = sum(file_manager.get_file_size(p) for p in input_paths)
 
     # Create output path
     output_path = file_manager.create_output_path(suffix=".pdf")

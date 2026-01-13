@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.exceptions import (
+    FileSizeLimitError,
     http_file_size_limit_error,
     http_file_processing_error,
     http_invalid_file_type_error,
@@ -157,14 +158,11 @@ async def compress_pdf(
     is_pro = rate_limit["is_pro"]
     max_size_mb = settings.max_file_size_pro_mb if is_pro else settings.max_file_size_free_mb
 
-    # Save uploaded file
-    input_path = await file_manager.save_upload(file)
-
-    # Check file size
-    file_size_mb = file_manager.get_file_size_mb(input_path)
-    if file_size_mb > max_size_mb:
-        file_manager.delete_file(input_path)
-        raise http_file_size_limit_error(max_size_mb, file_size_mb)
+    # Save uploaded file with size limit enforced during upload
+    try:
+        input_path = await file_manager.save_upload(file, max_size_mb=max_size_mb)
+    except FileSizeLimitError as e:
+        raise http_file_size_limit_error(e.max_size_mb, e.actual_size_mb)
 
     # Create output path
     output_path = file_manager.create_output_path(file.filename)

@@ -20,6 +20,7 @@ from app.models import Job, JobStatus, ToolType
 from app.services.merge import MergeService, get_merge_service
 from app.services.file_manager import FileManager, get_file_manager
 from app.middleware.rate_limit import MergeRateLimit, set_rate_limit_headers
+from app.i18n import get_translator, Messages
 
 router = APIRouter(prefix="/v1", tags=["merge"])
 settings = get_settings()
@@ -168,9 +169,10 @@ async def merge_pdfs(
 
     set_rate_limit_headers(response, rate_limit)
 
+    t = get_translator()
     return MergeResponse(
         job_id=str(job.id),
         status="pending",
-        message="Files uploaded. Merge processing started.",
+        message=t(Messages.MERGE_STARTED),
         file_count=len(files),
     )

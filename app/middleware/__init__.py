@@ -44,6 +44,10 @@ from app.middleware.api_key import (
     ApiKeyUser,
     OptionalApiKeyUser,
 )
+from app.middleware.language import (
+    LanguageMiddleware,
+    parse_accept_language,
+)
 
 __all__ = [
     # Rate limiting
@@ -86,4 +90,7 @@ __all__ = [
     "revoke_api_key",
     "ApiKeyUser",
     "OptionalApiKeyUser",
+    # Language / i18n
+    "LanguageMiddleware",
+    "parse_accept_language",
 ]

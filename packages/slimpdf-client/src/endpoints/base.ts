@@ -8,6 +8,7 @@ import type { RateLimitInfo } from '../types.js';
 export interface RequestContext {
   baseUrl: string;
   getAccessToken: () => string | undefined;
+  getLanguage: () => string;
   fetch: typeof fetch;
 }
 
@@ -67,6 +68,9 @@ export async function request<T>(
   // Build headers
   const headers: Record<string, string> = { ...customHeaders };
 
+  // Add language header
+  headers['X-Language'] = ctx.getLanguage();
+
   // Add auth header if token exists
   const token = ctx.getAccessToken();
   if (token) {
@@ -114,7 +118,9 @@ export async function requestBlob(
 ): Promise<Blob> {
   const url = `${ctx.baseUrl}${path}`;
 
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    'X-Language': ctx.getLanguage(),
+  };
   const token = ctx.getAccessToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;

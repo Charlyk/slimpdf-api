@@ -17,11 +17,16 @@ export type BillingInterval = 'month' | 'year';
 // Client Configuration
 // ============================================================================
 
+/** Supported languages for API responses */
+export type SupportedLanguage = 'en' | 'es' | 'fr' | 'de' | 'pt' | 'it' | 'ja' | 'zh' | 'ko';
+
 export interface ClientOptions {
   /** Base URL of the SlimPDF API (e.g., 'https://api.slimpdf.io') */
   baseUrl: string;
   /** Optional access token (JWT or API key) for authenticated requests */
   accessToken?: string;
+  /** Optional language for API responses (default: 'en') */
+  language?: SupportedLanguage;
   /** Optional custom fetch function for testing or custom implementations */
   fetch?: typeof fetch;
 }

@@ -24,6 +24,7 @@ from app.services.image_convert import (
 )
 from app.services.file_manager import FileManager, get_file_manager
 from app.middleware.rate_limit import ImageToPdfRateLimit, set_rate_limit_headers
+from app.i18n import get_translator, Messages
 
 router = APIRouter(prefix="/v1", tags=["image-to-pdf"])
 settings = get_settings()
@@ -201,9 +202,10 @@ async def convert_images_to_pdf(
 
     set_rate_limit_headers(response, rate_limit)
 
+    t = get_translator()
     return ImageToPdfResponse(
         job_id=str(job.id),
         status="pending",
-        message="Images uploaded. Conversion started.",
+        message=t(Messages.IMAGE_TO_PDF_STARTED),
         image_count=len(files),
     )

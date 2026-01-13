@@ -24,6 +24,7 @@ from app.services.compression import (
 )
 from app.services.file_manager import FileManager, get_file_manager
 from app.middleware.rate_limit import CompressRateLimit, set_rate_limit_headers
+from app.i18n import get_translator, Messages
 
 router = APIRouter(prefix="/v1", tags=["compress"])
 settings = get_settings()
@@ -195,8 +196,9 @@ async def compress_pdf(
 
     set_rate_limit_headers(response, rate_limit)
 
+    t = get_translator()
     return CompressResponse(
         job_id=str(job.id),
         status="pending",
-        message="File uploaded. Processing started.",
+        message=t(Messages.COMPRESS_STARTED),
     )

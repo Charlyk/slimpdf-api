@@ -12,6 +12,7 @@ export type {
   // Config
   ClientOptions,
   PollOptions,
+  SupportedLanguage,
   // Enums
   CompressionQuality,
   PageSize,

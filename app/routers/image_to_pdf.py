@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +23,7 @@ from app.services.image_convert import (
     get_image_convert_service,
 )
 from app.services.file_manager import FileManager, get_file_manager
-from app.middleware.rate_limit import ImageToPdfRateLimit
+from app.middleware.rate_limit import ImageToPdfRateLimit, set_rate_limit_headers
 
 router = APIRouter(prefix="/v1", tags=["image-to-pdf"])
 settings = get_settings()
@@ -107,6 +107,7 @@ async def process_image_to_pdf(
 
 @router.post("/image-to-pdf", status_code=status.HTTP_202_ACCEPTED, response_model=ImageToPdfResponse)
 async def convert_images_to_pdf(
+    response: Response,
     background_tasks: BackgroundTasks,
     rate_limit: ImageToPdfRateLimit,
     files: Annotated[
@@ -197,6 +198,8 @@ async def convert_images_to_pdf(
         image_service,
         file_manager,
     )
+
+    set_rate_limit_headers(response, rate_limit)
 
     return ImageToPdfResponse(
         job_id=str(job.id),

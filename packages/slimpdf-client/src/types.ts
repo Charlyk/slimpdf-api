@@ -82,6 +82,23 @@ export interface VerifyResponse {
 }
 
 // ============================================================================
+// Rate Limiting
+// ============================================================================
+
+/**
+ * Rate limit information returned from API responses.
+ * Only present for free tier users - Pro users have unlimited access.
+ */
+export interface RateLimitInfo {
+  /** Maximum requests allowed per day */
+  limit: number;
+  /** Requests remaining in current period */
+  remaining: number;
+  /** Unix timestamp when the limit resets (midnight UTC) */
+  resetAt: number;
+}
+
+// ============================================================================
 // Job Responses
 // ============================================================================
 
@@ -89,6 +106,8 @@ export interface CompressResponse {
   job_id: string;
   status: string;
   message: string;
+  /** Rate limit info (only present for free tier users) */
+  rateLimit?: RateLimitInfo;
 }
 
 export interface MergeResponse {
@@ -96,6 +115,8 @@ export interface MergeResponse {
   status: string;
   message: string;
   file_count: number;
+  /** Rate limit info (only present for free tier users) */
+  rateLimit?: RateLimitInfo;
 }
 
 export interface ImageToPdfResponse {
@@ -103,6 +124,8 @@ export interface ImageToPdfResponse {
   status: string;
   message: string;
   image_count: number;
+  /** Rate limit info (only present for free tier users) */
+  rateLimit?: RateLimitInfo;
 }
 
 export interface JobStatusResponse {

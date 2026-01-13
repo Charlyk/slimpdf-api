@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +19,7 @@ from app.exceptions import (
 from app.models import Job, JobStatus, ToolType
 from app.services.merge import MergeService, get_merge_service
 from app.services.file_manager import FileManager, get_file_manager
-from app.middleware.rate_limit import MergeRateLimit
+from app.middleware.rate_limit import MergeRateLimit, set_rate_limit_headers
 
 router = APIRouter(prefix="/v1", tags=["merge"])
 settings = get_settings()
@@ -89,6 +89,7 @@ async def process_merge(
 
 @router.post("/merge", status_code=status.HTTP_202_ACCEPTED, response_model=MergeResponse)
 async def merge_pdfs(
+    response: Response,
     background_tasks: BackgroundTasks,
     rate_limit: MergeRateLimit,
     files: Annotated[
@@ -164,6 +165,8 @@ async def merge_pdfs(
         merge_service,
         file_manager,
     )
+
+    set_rate_limit_headers(response, rate_limit)
 
     return MergeResponse(
         job_id=str(job.id),

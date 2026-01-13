@@ -3,11 +3,33 @@
  */
 
 import { handleErrorResponse } from '../errors.js';
+import type { RateLimitInfo } from '../types.js';
 
 export interface RequestContext {
   baseUrl: string;
   getAccessToken: () => string | undefined;
   fetch: typeof fetch;
+}
+
+/**
+ * Parse rate limit headers from response.
+ * Returns undefined if headers are not present (Pro users).
+ */
+function parseRateLimitHeaders(response: Response): RateLimitInfo | undefined {
+  const limit = response.headers.get('X-RateLimit-Limit');
+  const remaining = response.headers.get('X-RateLimit-Remaining');
+  const resetAt = response.headers.get('X-RateLimit-Reset');
+
+  // Pro users don't have rate limit headers
+  if (!limit || !remaining || !resetAt) {
+    return undefined;
+  }
+
+  return {
+    limit: parseInt(limit, 10),
+    remaining: parseInt(remaining, 10),
+    resetAt: parseInt(resetAt, 10),
+  };
 }
 
 /**
@@ -21,9 +43,11 @@ export async function request<T>(
     body?: FormData | Record<string, unknown>;
     query?: Record<string, string | number | boolean | undefined>;
     headers?: Record<string, string>;
+    /** Include rate limit info from response headers */
+    includeRateLimit?: boolean;
   } = {}
 ): Promise<T> {
-  const { body, query, headers: customHeaders } = options;
+  const { body, query, headers: customHeaders, includeRateLimit } = options;
 
   // Build URL with query params
   let url = `${ctx.baseUrl}${path}`;
@@ -67,7 +91,17 @@ export async function request<T>(
   }
 
   // Parse JSON response
-  return response.json() as Promise<T>;
+  const data = await response.json() as T;
+
+  // Optionally include rate limit info
+  if (includeRateLimit) {
+    const rateLimit = parseRateLimitHeaders(response);
+    if (rateLimit) {
+      (data as Record<string, unknown>).rateLimit = rateLimit;
+    }
+  }
+
+  return data;
 }
 
 /**

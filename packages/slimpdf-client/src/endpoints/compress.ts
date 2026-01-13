@@ -40,6 +40,7 @@ export class CompressClient {
 
     return request<CompressResponse>(this.ctx, 'POST', '/v1/compress', {
       body: formData,
+      includeRateLimit: true,
     });
   }
 

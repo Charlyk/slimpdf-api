@@ -9,6 +9,7 @@ from app.middleware.rate_limit import (
     CompressRateLimit,
     MergeRateLimit,
     ImageToPdfRateLimit,
+    set_rate_limit_headers,
 )
 from app.middleware.file_validation import (
     FileSizeValidator,
@@ -54,6 +55,7 @@ __all__ = [
     "CompressRateLimit",
     "MergeRateLimit",
     "ImageToPdfRateLimit",
+    "set_rate_limit_headers",
     # File validation
     "FileSizeValidator",
     "pdf_validator",

@@ -26,6 +26,8 @@ export type {
   MeResponse,
   AuthTokenResponse,
   VerifyResponse,
+  // Rate Limiting
+  RateLimitInfo,
   // Jobs
   CompressResponse,
   MergeResponse,

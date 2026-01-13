@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, BackgroundTasks, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +23,7 @@ from app.services.compression import (
     get_compression_service,
 )
 from app.services.file_manager import FileManager, get_file_manager
-from app.middleware.rate_limit import CompressRateLimit
+from app.middleware.rate_limit import CompressRateLimit, set_rate_limit_headers
 
 router = APIRouter(prefix="/v1", tags=["compress"])
 settings = get_settings()
@@ -110,6 +110,7 @@ async def process_compression(
 
 @router.post("/compress", status_code=status.HTTP_202_ACCEPTED, response_model=CompressResponse)
 async def compress_pdf(
+    response: Response,
     background_tasks: BackgroundTasks,
     rate_limit: CompressRateLimit,
     file: Annotated[UploadFile, File(description="PDF file to compress")],
@@ -191,6 +192,8 @@ async def compress_pdf(
         compression_service,
         file_manager,
     )
+
+    set_rate_limit_headers(response, rate_limit)
 
     return CompressResponse(
         job_id=str(job.id),

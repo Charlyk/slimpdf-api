@@ -1,9 +1,10 @@
 """Rate limiting middleware and dependencies."""
 
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +13,7 @@ from app.database import get_db
 from app.exceptions import RateLimitError, http_rate_limit_error
 from app.services.usage import UsageService, get_usage_service
 from app.middleware.api_key import get_api_key_user
-from app.middleware.auth import CurrentUser
+from app.middleware.auth import CurrentUser, get_current_user_optional
 
 settings = get_settings()
 
@@ -59,16 +60,17 @@ class RateLimitChecker:
         """
         Check rate limit for the tool.
 
-        If a valid API key is provided, the user gets Pro access (no rate limits).
-        Otherwise, free tier rate limits are applied based on IP address.
+        Authentication priority:
+        1. API key (sk_*) - Pro users via programmatic access
+        2. JWT token - Website users (checks subscription status)
+        3. Anonymous - Rate limited by IP address
 
         Returns user context if allowed, raises exception if rate limited.
         """
         user_id: UUID | None = None
         is_pro = False
-        api_user: CurrentUser | None = None
 
-        # Try to authenticate via API key
+        # Try to authenticate via API key first
         if credentials and credentials.credentials.startswith("sk_"):
             try:
                 api_user = await get_api_key_user(request, credentials, db)
@@ -76,8 +78,15 @@ class RateLimitChecker:
                     user_id = api_user.id
                     is_pro = True
             except Exception:
-                # Invalid API key - fall through to free tier
+                # Invalid API key - fall through to JWT/anonymous
                 pass
+
+        # If not authenticated via API key, try JWT (website users)
+        if not is_pro:
+            jwt_user = await get_current_user_optional(request, credentials, db)
+            if jwt_user:
+                user_id = jwt_user.id
+                is_pro = jwt_user.is_pro
 
         # Get client IP for anonymous rate limiting
         ip_address = get_client_ip(request)
@@ -92,7 +101,7 @@ class RateLimitChecker:
                 "usage_limit": 0,  # 0 means unlimited
             }
 
-        # Check rate limit for free tier
+        # Check rate limit for free tier (by user_id if logged in, else by IP)
         allowed, current, limit = await usage_service.check_rate_limit(
             db=db,
             tool=self.tool,
@@ -123,3 +132,34 @@ image_to_pdf_rate_limit = RateLimitChecker("image_to_pdf")
 CompressRateLimit = Annotated[dict, Depends(compress_rate_limit)]
 MergeRateLimit = Annotated[dict, Depends(merge_rate_limit)]
 ImageToPdfRateLimit = Annotated[dict, Depends(image_to_pdf_rate_limit)]
+
+
+def set_rate_limit_headers(response: Response, rate_limit: dict) -> None:
+    """
+    Set standard rate limit headers on the response.
+
+    Headers:
+        X-RateLimit-Limit: Maximum requests allowed per day
+        X-RateLimit-Remaining: Requests remaining in current period
+        X-RateLimit-Reset: Unix timestamp when the limit resets (midnight UTC)
+
+    For Pro users (unlimited), headers are not set.
+    """
+    if rate_limit["is_pro"]:
+        # Pro users have unlimited access, no headers needed
+        return
+
+    limit = rate_limit["usage_limit"]
+    used = rate_limit["usage_count"]
+    remaining = max(0, limit - used)
+
+    # Calculate reset time (next midnight UTC)
+    now = datetime.now(timezone.utc)
+    tomorrow_midnight = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    reset_timestamp = int(tomorrow_midnight.timestamp())
+
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Reset"] = str(reset_timestamp)

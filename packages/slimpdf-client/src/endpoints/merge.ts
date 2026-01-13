@@ -26,6 +26,7 @@ export class MergeClient {
 
     return request<MergeResponse>(this.ctx, 'POST', '/v1/merge', {
       body: formData,
+      includeRateLimit: true,
     });
   }
 

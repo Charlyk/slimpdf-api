@@ -26,25 +26,30 @@ class CompressionQuality(str, Enum):
 
 # Settings for each quality level
 # QFactor: 0.0 = best quality, larger values = more compression (max ~2.5)
+# Subsampling: [1 1 1 1] = no subsampling, [2 1 1 2] = 4:2:0 chroma subsampling
 QUALITY_SETTINGS = {
     CompressionQuality.LOW: {
-        "dpi": 72,
-        "qfactor": 1.5,  # High compression
+        "dpi": 50,
+        "qfactor": 2.4,  # Maximum compression
+        "subsampling": "[2 1 1 2]",  # 4:2:0 chroma subsampling for smaller files
         "pdfsettings": "/screen",
     },
     CompressionQuality.MEDIUM: {
-        "dpi": 120,
-        "qfactor": 0.76,  # Medium compression
+        "dpi": 72,
+        "qfactor": 1.8,  # High compression
+        "subsampling": "[2 1 1 2]",
         "pdfsettings": "/ebook",
     },
     CompressionQuality.HIGH: {
-        "dpi": 150,
-        "qfactor": 0.4,  # Light compression
+        "dpi": 100,
+        "qfactor": 1.0,  # Medium compression
+        "subsampling": "[1 1 1 1]",  # No subsampling for better quality
         "pdfsettings": "/ebook",
     },
     CompressionQuality.MAXIMUM: {
-        "dpi": 200,
-        "qfactor": 0.15,  # Minimal compression, best quality
+        "dpi": 150,
+        "qfactor": 0.4,  # Light compression, best quality
+        "subsampling": "[1 1 1 1]",
         "pdfsettings": "/printer",
     },
 }
@@ -137,14 +142,16 @@ class CompressionService:
         dpi = custom_dpi or settings["dpi"]
         qfactor = custom_qfactor or settings["qfactor"]
         pdf_setting = settings["pdfsettings"]
+        subsampling = settings.get("subsampling", "[1 1 1 1]")
 
         # Build PostScript command for JPEG quality settings
         # QFactor: 0.0 = best quality, higher = more compression
+        # HSamples/VSamples: [1 1 1 1] = no subsampling, [2 1 1 2] = 4:2:0 chroma subsampling
         ps_quality_settings = (
             f"<< /ColorACSImageDict << /QFactor {qfactor} /Blend 1 "
-            f"/HSamples [1 1 1 1] /VSamples [1 1 1 1] >> "
+            f"/HSamples {subsampling} /VSamples {subsampling} >> "
             f"/GrayACSImageDict << /QFactor {qfactor} /Blend 1 "
-            f"/HSamples [1 1 1 1] /VSamples [1 1 1 1] >> >> setdistillerparams"
+            f"/HSamples {subsampling} /VSamples {subsampling} >> >> setdistillerparams"
         )
 
         cmd = [

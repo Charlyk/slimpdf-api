@@ -7,6 +7,9 @@
 // Main client
 export { SlimPdfClient } from './client.js';
 
+// API URL Constants
+export { API_URL_PRODUCTION, API_URL_DEVELOPMENT } from './types.js';
+
 // Types
 export type {
   // Config
@@ -20,6 +23,7 @@ export type {
   ToolType,
   Plan,
   BillingInterval,
+  ApiEnvironment,
   // User & Auth
   User,
   UsageStats,

@@ -17,10 +17,17 @@ import { ApiKeysClient } from './endpoints/api-keys.js';
  *
  * @example
  * ```typescript
+ * // Using environment (recommended)
  * const client = new SlimPdfClient({
- *   baseUrl: 'https://api.slimpdf.io',
+ *   environment: 'production', // or 'development'
  *   accessToken: 'your-jwt-or-api-key', // optional
  *   language: 'es', // optional, defaults to 'en'
+ * });
+ *
+ * // Or with explicit baseUrl
+ * const client = new SlimPdfClient({
+ *   baseUrl: 'https://api.slimpdf.io',
+ *   accessToken: 'your-jwt-or-api-key',
  * });
  *
  * // Compress a PDF
@@ -60,13 +67,17 @@ export class SlimPdfClient {
   /** API key management (Pro) */
   readonly apiKeys: ApiKeysClient;
 
-  constructor(options: ClientOptions) {
+  constructor(options: ClientOptions = {}) {
     this._accessToken = options.accessToken;
     this._language = options.language || 'en';
 
+    // Resolve base URL: explicit baseUrl > environment > default to production
+    const baseUrl = options.baseUrl
+      ?? (options.environment === 'development' ? API_URL_DEVELOPMENT : API_URL_PRODUCTION);
+
     // Create request context
     this.ctx = {
-      baseUrl: options.baseUrl.replace(/\/$/, ''), // Remove trailing slash
+      baseUrl: baseUrl.replace(/\/$/, ''), // Remove trailing slash
       getAccessToken: () => this._accessToken,
       getLanguage: () => this._language,
       fetch: options.fetch || globalThis.fetch.bind(globalThis),
